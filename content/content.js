@@ -10,6 +10,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendRes) => {
   return true;
 });
 
+// 请求状态跟踪
+let requestStatus = {
+  running: 0,
+  pending: 0,
+  completed: 0,
+  total: 0
+};
+
 async function handleMessage(msg, sender, sendRes) {
   try {
     switch (msg.type) {
@@ -36,6 +44,10 @@ async function handleMessage(msg, sender, sendRes) {
         break;
       case 'SELECTION_TRANSLATION_RESULT':
         handleSelectionResult(msg.data);
+        sendRes({ success: true });
+        break;
+      case 'REQUEST_STATUS_UPDATE':
+        handleRequestStatus(msg.data);
         sendRes({ success: true });
         break;
       default:
@@ -131,6 +143,11 @@ function handleSelectionResult(data) {
   showSelectionPopup(data.translated, data.rect);
 }
 
+function handleRequestStatus(data) {
+  requestStatus = { ...data };
+  updateProgressBar(requestStatus);
+}
+
 // 块状进度条
 function showProgressBar() {
   let bar = document.getElementById('zhipu-progress-bar');
@@ -140,6 +157,11 @@ function showProgressBar() {
     bar.className = 'zhipu-progress-bar';
     bar.innerHTML = `
       <div class="zhipu-progress-title">翻译中</div>
+      <div class="zhipu-progress-status" id="zhipu-progress-status">
+        <span class="zhipu-status-item">等待中: <span id="zhipu-status-pending">0</span>
+        <span class="zhipu-status-item">请求中: <span id="zhipu-status-running">0</span>
+        <span class="zhipu-status-item">已完成: <span id="zhipu-status-completed">0</span>
+      </div>
       <div class="zhipu-progress-blocks" id="zhipu-blocks"></div>
       <div class="zhipu-progress-count" id="zhipu-count">0/0</div>
     `;
@@ -176,6 +198,18 @@ function updateProgressBar(done, total, failed = false) {
   blocksEl.innerHTML = html;
 
   if (countEl) countEl.textContent = `${done}/${total}`;
+}
+
+function updateRequestStatus(status) {
+  requestStatus = { ...status };
+
+  const pendingEl = document.getElementById('zhipu-status-pending');
+  const runningEl = document.getElementById('zhipu-status-running');
+  const completedEl = document.getElementById('zhipu-status-completed');
+
+  if (pendingEl) pendingEl.textContent = status.pending || 0;
+  if (runningEl) runningEl.textContent = status.running || 0;
+  if (completedEl) completedEl.textContent = status.completed || 0;
 }
 
 function showLoadingState() {
