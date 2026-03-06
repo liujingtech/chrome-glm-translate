@@ -39,14 +39,57 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('智谱翻译插件已安装');
 });
 
+// 安全发送消息到tab
+async function safeSendMessage(tabId, message) {
+  try {
+    await chrome.tabs.sendMessage(tabId, message);
+  } catch (error) {
+    console.log('消息发送失败，尝试注入content script...');
+    // 尝试注入content script后重试
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        files: [
+          'utils/constants.js',
+          'content/extractor.js',
+          'content/renderer.js',
+          'content/content.js'
+        ]
+      });
+      // 注入CSS
+      await chrome.scripting.insertCSS({
+        target: { tabId: tabId },
+        files: ['content/content.css']
+      });
+      // 重试发送消息
+      await chrome.tabs.sendMessage(tabId, message);
+    } catch (injectError) {
+      console.error('注入content script失败:', injectError);
+      // 显示通知
+      chrome.notifications?.create({
+        type: 'basic',
+        iconUrl: 'icons/icon48.png',
+        title: '智谱翻译',
+        message: '此页面不支持翻译，请刷新页面后重试'
+      });
+    }
+  }
+}
+
 // 右键菜单点击事件
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  // 检查是否是特殊页面
+  if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+    console.log('Chrome内部页面不支持content script');
+    return;
+  }
+
   // 检查API Key
   const hasKey = await checkApiKey();
 
   if (!hasKey) {
     // 显示API Key引导
-    chrome.tabs.sendMessage(tab.id, { type: 'SHOW_API_GUIDE' });
+    safeSendMessage(tab.id, { type: 'SHOW_API_GUIDE' });
     return;
   }
 
@@ -55,7 +98,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       await handleTranslatePage(tab);
       break;
     case 'translateSelection':
-      await handleTranslateSelection(tab, info.selectionText);
+      await handleTranslateSelection(tab, info.selectionText, tab);
       break;
   }
 });
@@ -116,23 +159,15 @@ async function handleMessage(message, sender, sendResponse) {
 
 // 处理整页翻译
 async function handleTranslatePage(tab) {
-  try {
-    chrome.tabs.sendMessage(tab.id, { type: 'TRANSLATE_PAGE' });
-  } catch (error) {
-    console.error('触发整页翻译失败:', error);
-  }
+  safeSendMessage(tab.id, { type: 'TRANSLATE_PAGE' });
 }
 
 // 处理选中翻译
 async function handleTranslateSelection(tab, selectedText) {
-  try {
-    chrome.tabs.sendMessage(tab.id, {
-      type: 'TRANSLATE_SELECTION',
-      data: { text: selectedText }
-    });
-  } catch (error) {
-    console.error('触发选中翻译失败:', error);
-  }
+  safeSendMessage(tab.id, {
+    type: 'TRANSLATE_SELECTION',
+    data: { text: selectedText }
+  });
 }
 
 // 处理页面翻译请求
@@ -168,7 +203,7 @@ async function processPageTranslation(data, tabId) {
           translated: translatedText
         });
       } catch (error) {
-        chrome.tabs.sendMessage(tabId, {
+        safeSendMessage(tabId, {
           type: 'TRANSLATE_RESULT',
           data: { success: false, error: error.message }
         });
@@ -182,7 +217,7 @@ async function processPageTranslation(data, tabId) {
   }
 
   // 发送翻译结果到content script
-  chrome.tabs.sendMessage(tabId, {
+  safeSendMessage(tabId, {
     type: 'TRANSLATE_RESULT',
     data: { success: true, translations: allTranslations }
   });
@@ -201,12 +236,12 @@ async function processSelectionTranslation(data, tabId) {
       settings.apiKey
     );
 
-    chrome.tabs.sendMessage(tabId, {
+    safeSendMessage(tabId, {
       type: 'SELECTION_TRANSLATION_RESULT',
       data: { success: true, translated, rect }
     });
   } catch (error) {
-    chrome.tabs.sendMessage(tabId, {
+    safeSendMessage(tabId, {
       type: 'SELECTION_TRANSLATION_RESULT',
       data: { success: false, error: error.message, rect }
     });
