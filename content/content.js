@@ -10,14 +10,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendRes) => {
   return true;
 });
 
-// 请求状态跟踪
-let requestStatus = {
-  running: 0,
-  pending: 0,
-  completed: 0,
-  total: 0
-};
-
 async function handleMessage(msg, sender, sendRes) {
   try {
     switch (msg.type) {
@@ -44,10 +36,6 @@ async function handleMessage(msg, sender, sendRes) {
         break;
       case 'SELECTION_TRANSLATION_RESULT':
         handleSelectionResult(msg.data);
-        sendRes({ success: true });
-        break;
-      case 'REQUEST_STATUS_UPDATE':
-        handleRequestStatus(msg.data);
         sendRes({ success: true });
         break;
       default:
@@ -104,30 +92,51 @@ function handlePartialResult(data) {
   completedBatches++;
   updateProgressBar(completedBatches, totalBatches, !success);
 
+  console.log('收到翻译结果:', { success, startIndex, transLen: translations?.length, nodesLen: currentTranslationNodes.length });
+
   if (!success) {
     console.warn('批次失败:', error);
-    // 内容过滤错误时用原文
-    if (error?.includes('unsafe') || error?.includes('sensitive')) {
-      console.log('内容过滤，保留原文');
-    }
+    return;
   }
 
   const nodes = currentTranslationNodes;
+  let rendered = 0;
+  let skipped = 0;
+  let same = 0;
+
   for (let i = 0; i < translations.length; i++) {
     const idx = startIndex + i;
-    if (translatedIndices.has(idx)) continue;
+    if (translatedIndices.has(idx)) { skipped++; continue; }
 
     const item = nodes[idx];
     const trans = translations[i];
-    if (item?.node?.parentElement) {
-      try {
-        if (trans && trans !== item.text) {
-          replaceText(item.node, trans);
-        }
-        translatedIndices.add(idx);
-      } catch (e) {}
+
+    if (!item?.node?.parentElement) {
+      skipped++;
+      continue;
+    }
+
+    if (!trans) {
+      skipped++;
+      continue;
+    }
+
+    if (trans === item.text) {
+      same++;
+      translatedIndices.add(idx);
+      continue;
+    }
+
+    try {
+      replaceText(item.node, trans);
+      translatedIndices.add(idx);
+      rendered++;
+    } catch (e) {
+      console.warn('渲染失败:', e);
     }
   }
+
+  console.log(`渲染统计: 渲染=${rendered}, 原文相同=${same}, 跳过=${skipped}`);
 }
 
 function handleTranslationComplete() {
@@ -143,11 +152,6 @@ function handleSelectionResult(data) {
   showSelectionPopup(data.translated, data.rect);
 }
 
-function handleRequestStatus(data) {
-  requestStatus = { ...data };
-  updateProgressBar(requestStatus);
-}
-
 // 块状进度条
 function showProgressBar() {
   let bar = document.getElementById('zhipu-progress-bar');
@@ -157,11 +161,6 @@ function showProgressBar() {
     bar.className = 'zhipu-progress-bar';
     bar.innerHTML = `
       <div class="zhipu-progress-title">翻译中</div>
-      <div class="zhipu-progress-status" id="zhipu-progress-status">
-        <span class="zhipu-status-item">等待中: <span id="zhipu-status-pending">0</span>
-        <span class="zhipu-status-item">请求中: <span id="zhipu-status-running">0</span>
-        <span class="zhipu-status-item">已完成: <span id="zhipu-status-completed">0</span>
-      </div>
       <div class="zhipu-progress-blocks" id="zhipu-blocks"></div>
       <div class="zhipu-progress-count" id="zhipu-count">0/0</div>
     `;
@@ -198,18 +197,6 @@ function updateProgressBar(done, total, failed = false) {
   blocksEl.innerHTML = html;
 
   if (countEl) countEl.textContent = `${done}/${total}`;
-}
-
-function updateRequestStatus(status) {
-  requestStatus = { ...status };
-
-  const pendingEl = document.getElementById('zhipu-status-pending');
-  const runningEl = document.getElementById('zhipu-status-running');
-  const completedEl = document.getElementById('zhipu-status-completed');
-
-  if (pendingEl) pendingEl.textContent = status.pending || 0;
-  if (runningEl) runningEl.textContent = status.running || 0;
-  if (completedEl) completedEl.textContent = status.completed || 0;
 }
 
 function showLoadingState() {

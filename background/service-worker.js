@@ -212,21 +212,9 @@ async function translatePageParallel(data, tabId) {
 
   console.log(`并行翻译: ${uncachedItems.length}个未缓存文本, ${batches.length}个批次, 并发数: ${maxConcurrency}`);
 
-  // 发送请求状态更新
-  function sendRequestStatus(running, pending, completed, total) {
-    sendMsg(tabId, {
-      type: 'REQUEST_STATUS_UPDATE',
-      data: { running, pending, completed, total }
-    });
-  }
-
   // 使用并发控制的并行翻译
   let running = 0;
   let index = 0;
-  let completed = 0;
-
-  // 发送初始状态
-  sendRequestStatus(0, batches.length, 0, total);
 
   return new Promise((resolve) => {
     function runNext() {
@@ -234,9 +222,6 @@ async function translatePageParallel(data, tabId) {
         const batchIndex = index++;
         const batch = batches[batchIndex];
         running++;
-
-        // 发送请求状态更新
-        sendRequestStatus(running, batches.length - index, completed, total);
 
         (async () => {
           try {
@@ -246,6 +231,8 @@ async function translatePageParallel(data, tabId) {
             const translated = await translate(joined, settings, SEP);
             const parts = translated.split(SEP);
             const translations = parts.map(p => p.trim());
+
+            console.log(`批次${batchIndex}: 输入=${batchTexts.length}, 分割后=${translations.length}`);
 
             // 存入缓存并合并到 cachedResults
             for (let j = 0; j < batch.items.length; j++) {
@@ -265,6 +252,8 @@ async function translatePageParallel(data, tabId) {
               }
               return text;
             });
+
+            console.log(`发送翻译结果: 已完成=${completedCount}/${total}, 总长度=${allTranslations.length}`);
 
             sendMsg(tabId, {
               type: 'PARTIAL_TRANSLATION_RESULT',
@@ -292,7 +281,6 @@ async function translatePageParallel(data, tabId) {
             });
           } finally {
             running--;
-            completed++;
             if (index < batches.length) {
               runNext();
             } else if (running === 0) {
@@ -300,8 +288,6 @@ async function translatePageParallel(data, tabId) {
               console.log('并行翻译完成');
               resolve();
             }
-            // 发送最终状态
-            sendRequestStatus(0, 0, completed, total);
           }
         })();
       }
