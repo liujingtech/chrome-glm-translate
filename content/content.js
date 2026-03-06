@@ -2,6 +2,8 @@
 
 let currentTranslationNodes = [];
 let translatedIndices = new Set();
+let totalBatches = 0;
+let completedBatches = 0;
 
 chrome.runtime.onMessage.addListener((msg, sender, sendRes) => {
   handleMessage(msg, sender, sendRes);
@@ -43,23 +45,25 @@ async function handleMessage(msg, sender, sendRes) {
 }
 
 function handleTranslatePage() {
-  showLoadingState();
+  showProgressBar();
   removeAllTranslations();
   translatedIndices.clear();
+  completedBatches = 0;
 
   const textNodes = extractPageTexts();
   if (textNodes.length === 0) {
-    hideLoadingState();
-    showError('没有可见内容可翻译');
+    hideProgressBar();
+    showError('没有可见内容');
     return;
   }
 
   currentTranslationNodes = textNodes;
-  const texts = textNodes.map(item => item.text);
+  totalBatches = Math.ceil(textNodes.length / 20);
+  updateProgressBar(0, totalBatches);
 
-  console.log('请求翻译, 可见节点:', texts.length);
+  console.log('翻译请求:', textNodes.length, '节点,', totalBatches, '批次');
 
-  chrome.runtime.sendMessage({ type: 'REQUEST_TRANSLATION', data: { texts } });
+  chrome.runtime.sendMessage({ type: 'REQUEST_TRANSLATION', data: { texts: textNodes.map(n => n.text) } });
 }
 
 function handleTranslateSelection() {
@@ -70,24 +74,33 @@ function handleTranslateSelection() {
 }
 
 function handlePartialResult(data) {
-  if (!data.success) { console.error('批次失败'); return; }
+  const { success, startIndex, translations, progress, error } = data;
 
-  const { startIndex, translations, progress } = data;
+  // 更新批次进度
+  completedBatches++;
+  updateProgressBar(completedBatches, totalBatches, !success);
+
+  if (!success) {
+    console.warn('批次失败:', error);
+    // 内容过滤错误时用原文
+    if (error?.includes('unsafe') || error?.includes('sensitive')) {
+      console.log('内容过滤，保留原文');
+    }
+  }
+
   const nodes = currentTranslationNodes;
-
-  // 更新进度
-  if (progress) updateProgress(progress);
-
-  // 渲染
   for (let i = 0; i < translations.length; i++) {
     const idx = startIndex + i;
     if (translatedIndices.has(idx)) continue;
 
     const item = nodes[idx];
     const trans = translations[i];
-    if (trans && item?.node?.parentElement) {
+    if (item?.node?.parentElement) {
       try {
-        renderBilingual(item.node, trans);
+        // 翻译失败或内容相同时可能不渲染
+        if (trans && trans !== item.text) {
+          renderBilingual(item.node, trans);
+        }
         translatedIndices.add(idx);
       } catch (e) {}
     }
@@ -95,8 +108,8 @@ function handlePartialResult(data) {
 }
 
 function handleTranslationComplete() {
-  hideLoadingState();
-  console.log('完成, 已渲染:', translatedIndices.size);
+  hideProgressBar();
+  console.log('完成, 渲染:', translatedIndices.size);
   currentTranslationNodes = [];
   translatedIndices.clear();
 }
@@ -107,12 +120,68 @@ function handleSelectionResult(data) {
   showSelectionPopup(data.translated, data.rect);
 }
 
-function updateProgress(p) {
-  const loader = document.getElementById('zhipu-loading');
-  if (loader) {
-    const span = loader.querySelector('span');
-    if (span) span.textContent = `翻译中... ${p.done}/${p.total}`;
+// 块状进度条
+function showProgressBar() {
+  let bar = document.getElementById('zhipu-progress-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'zhipu-progress-bar';
+    bar.className = 'zhipu-progress-bar';
+    bar.innerHTML = `
+      <div class="zhipu-progress-title">翻译中</div>
+      <div class="zhipu-progress-blocks" id="zhipu-blocks"></div>
+      <div class="zhipu-progress-count" id="zhipu-count">0/0</div>
+    `;
+    document.body.appendChild(bar);
   }
+  bar.style.display = 'block';
+}
+
+function hideProgressBar() {
+  const bar = document.getElementById('zhipu-progress-bar');
+  if (bar) {
+    setTimeout(() => { bar.style.display = 'none'; }, 500);
+  }
+}
+
+function updateProgressBar(done, total, failed = false) {
+  const blocksEl = document.getElementById('zhipu-blocks');
+  const countEl = document.getElementById('zhipu-count');
+  if (!blocksEl) return;
+
+  // 最多显示20个块
+  const displayBlocks = Math.min(total, 20);
+  const ratio = total / displayBlocks;
+
+  let html = '';
+  for (let i = 0; i < displayBlocks; i++) {
+    const blockDone = (i + 1) * ratio <= done;
+    const blockFailed = failed && Math.floor(done / ratio) === i;
+    let cls = 'zhipu-block';
+    if (blockFailed) cls += ' failed';
+    else if (blockDone) cls += ' done';
+    html += `<div class="${cls}"></div>`;
+  }
+  blocksEl.innerHTML = html;
+
+  if (countEl) countEl.textContent = `${done}/${total}`;
+}
+
+function showLoadingState() {
+  let loader = document.getElementById('zhipu-loading');
+  if (!loader) {
+    loader = document.createElement('div');
+    loader.id = 'zhipu-loading';
+    loader.className = 'zhipu-loading';
+    loader.innerHTML = '<div class="zhipu-spinner"></div><span>翻译中...</span>';
+    document.body.appendChild(loader);
+  }
+  loader.style.display = 'flex';
+}
+
+function hideLoadingState() {
+  const loader = document.getElementById('zhipu-loading');
+  if (loader) loader.style.display = 'none';
 }
 
 function setupGuideEvents() {
