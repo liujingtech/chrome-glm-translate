@@ -22,6 +22,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   initLanguageSelect();
   initModelSelect();
   bindEvents();
+  // 监听存储变化，实时同步
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local') {
+      if (changes.targetLang !== undefined) {
+        window.currentSettings.targetLang = changes.targetLang.newValue;
+        initLanguageSelect();
+      }
+      if (changes.model !== undefined) {
+        window.currentSettings.model = changes.model.newValue;
+        initModelSelect();
+      }
+    }
+  });
 });
 
 // 加载设置
