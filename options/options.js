@@ -13,18 +13,17 @@ const LANGUAGES = [
 ];
 
 const MODELS = [
-  { value: 'GLM-3-Turbo', name: 'GLM-3-Turbo (默认)' },
-  { value: 'GLM-4-FLASH', name: 'GLM-4-FLASH (快速)' },
-  { value: 'GLM-4-AIR', name: 'GLM-4-AIR (平衡)' },
-  { value: 'GLM-4', name: 'GLM-4 (最佳)' }
+  { value: 'GLM-3-Turbo', name: 'GLM-3-Turbo', maxConcurrency: 50 },
+  { value: 'GLM-4-FLASH', name: 'GLM-4-Flash', maxConcurrency: 50 },
+  { value: 'GLM-4-AIR', name: 'GLM-4-Air', maxConcurrency: 100 },
+  { value: 'GLM-4', name: 'GLM-4', maxConcurrency: 30 }
 ];
 
 const DEFAULT_SETTINGS = {
   apiKey: '',
   targetLang: 'zh-CN',
   model: 'GLM-3-Turbo',
-  filterNodes: true,
-  maxConcurrency: 5
+  filterNodes: true
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -36,12 +35,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadSettings() {
   return new Promise(resolve => {
-    chrome.storage.local.get(['apiKey', 'targetLang', 'model', 'filterNodes', 'maxConcurrency'], (result) => {
+    chrome.storage.local.get(['apiKey', 'targetLang', 'model', 'filterNodes'], (result) => {
       document.getElementById('apiKey').value = result.apiKey || '';
       document.getElementById('targetLang').value = result.targetLang || 'zh-CN';
       document.getElementById('model').value = result.model || 'GLM-3-Turbo';
       document.getElementById('filterNodes').checked = result.filterNodes !== false;
-      document.getElementById('maxConcurrency').value = result.maxConcurrency || 5;
       resolve();
     });
   });
@@ -56,7 +54,7 @@ function initLanguageSelect() {
     option.textContent = lang.name;
     if (lang.code === document.getElementById('targetLang').value) {
       option.selected = true;
-      }
+    }
     select.appendChild(option);
   });
 }
@@ -67,12 +65,28 @@ function initModelSelect() {
   MODELS.forEach(model => {
     const option = document.createElement('option');
     option.value = model.value;
-    option.textContent = model.name;
+    option.textContent = `${model.name} (并发: ${model.maxConcurrency})`;
     if (model.value === document.getElementById('model').value) {
       option.selected = true;
-      }
+    }
     select.appendChild(option);
   });
+
+  // 监听模型变化，更新并发数显示
+  select.addEventListener('change', () => {
+    updateModelConcurrency(select.value);
+  });
+
+  // 初始化显示
+  updateModelConcurrency(select.value);
+}
+
+function updateModelConcurrency(modelValue) {
+  const model = MODELS.find(m => m.value === modelValue);
+  const el = document.getElementById('modelConcurrency');
+  if (model && el) {
+    el.textContent = `最大并发: ${model.maxConcurrency}`;
+  }
 }
 
 function bindEvents() {
@@ -101,7 +115,7 @@ async function verifyApiKey() {
     const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'glm-4-flash', messages: [{ role: 'user', content: 'Hi' }], max_tokens: 1 })
+      body: JSON.stringify({ model: 'glm-3-turbo', messages: [{ role: 'user', content: 'Hi' }], max_tokens: 1 })
     });
 
     if (response.ok) {
@@ -120,8 +134,7 @@ async function saveSettings() {
     apiKey: document.getElementById('apiKey').value.trim(),
     targetLang: document.getElementById('targetLang').value,
     model: document.getElementById('model').value,
-    filterNodes: document.getElementById('filterNodes').checked,
-    maxConcurrency: parseInt(document.getElementById('maxConcurrency').value) || 5
+    filterNodes: document.getElementById('filterNodes').checked
   };
 
   const statusEl = document.getElementById('saveStatus');

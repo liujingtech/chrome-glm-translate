@@ -41,6 +41,12 @@ async function getTextCache(text, targetLang) {
         return;
       }
 
+      // 检查原文是否匹配（防止 hash 碰撞）
+      if (entry.original !== text) {
+        resolve(null);
+        return;
+      }
+
       resolve(entry.translated);
     });
   });
@@ -97,7 +103,12 @@ const LANGUAGE_MAP = {
   'de': '德语', 'es': '西班牙语', 'ru': '俄语'
 };
 
-const MODELS = { 'GLM-3-Turbo': 'glm-3-turbo', 'GLM-4': 'glm-4', 'GLM-4-AIR': 'glm-4-air', 'GLM-4-FLASH': 'glm-4-flash' };
+const MODELS = {
+  'GLM-3-Turbo': { api: 'glm-3-turbo', maxConcurrency: 50 },
+  'GLM-4-FLASH': { api: 'glm-4-flash', maxConcurrency: 50 },
+  'GLM-4-AIR': { api: 'glm-4-air', maxConcurrency: 100 },
+  'GLM-4': { api: 'glm-4', maxConcurrency: 30 }
+};
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({ id: 'translatePage', title: '翻译整页', contexts: ['page'] });
@@ -150,21 +161,60 @@ async function translatePageParallel(data, tabId) {
   const settings = await getSettings();
   const texts = data.texts;
   const total = texts.length;
-  const batchSize = 20;
-  const maxConcurrency = settings.maxConcurrency || 5;
-  const batches = [];
+  const targetLang = settings.targetLang;
 
-  // 分批
-  for (let i = 0; i < texts.length; i += batchSize) {
-    batches.push({ startIndex: i, texts: texts.slice(i, i + batchSize) });
+  // 查询缓存，分离已缓存和未缓存的文本
+  const cachedResults = new Map();  // index -> translated text
+  const uncachedItems = [];         // { index, text }
+
+  for (let i = 0; i < texts.length; i++) {
+    const text = texts[i];
+    const cached = await getTextCache(text, targetLang);
+    if (cached !== null) {
+      cachedResults.set(i, cached);
+    } else {
+      uncachedItems.push({ index: i, text: text });
+    }
   }
 
-  console.log(`并行翻译: ${total}个文本, ${batches.length}个批次, 并发数: ${maxConcurrency}`);
+  console.log(`缓存命中: ${cachedResults.size}/${total}, 需翻译: ${uncachedItems.length}`);
+
+  // 如果全部命中缓存，直接返回结果
+  if (uncachedItems.length === 0) {
+    const translations = texts.map((_, i) => cachedResults.get(i));
+    sendMsg(tabId, {
+      type: 'PARTIAL_TRANSLATION_RESULT',
+      data: {
+        success: true,
+        startIndex: 0,
+        translations: translations,
+        progress: { done: total, total: total }
+      }
+    });
+    sendMsg(tabId, { type: 'TRANSLATION_COMPLETE' });
+    console.log('全部命中缓存，翻译完成');
+    return;
+  }
+
+  const batchSize = 20;
+  const modelConfig = MODELS[settings.model] || MODELS['GLM-3-Turbo'];
+  const maxConcurrency = modelConfig.maxConcurrency;
+  const batches = [];
+
+  // 分批（基于未缓存的文本）
+  for (let i = 0; i < uncachedItems.length; i += batchSize) {
+    const batchItems = uncachedItems.slice(i, i + batchSize);
+    batches.push({
+      startBatchIndex: i,
+      items: batchItems  // [{index, text}, ...]
+    });
+  }
+
+  console.log(`并行翻译: ${uncachedItems.length}个未缓存文本, ${batches.length}个批次, 并发数: ${maxConcurrency}`);
 
   // 使用并发控制的并行翻译
   let running = 0;
   let index = 0;
-  let hasError = false;
 
   return new Promise((resolve) => {
     function runNext() {
@@ -176,25 +226,54 @@ async function translatePageParallel(data, tabId) {
         (async () => {
           try {
             const SEP = `<<S${batchIndex}E>>`;
-            const joined = batch.texts.join('\n' + SEP + '\n');
+            const batchTexts = batch.items.map(item => item.text);
+            const joined = batchTexts.join('\n' + SEP + '\n');
             const translated = await translate(joined, settings, SEP);
             const parts = translated.split(SEP);
             const translations = parts.map(p => p.trim());
+
+            // 存入缓存并合并到 cachedResults
+            for (let j = 0; j < batch.items.length; j++) {
+              const originalIndex = batch.items[j].index;
+              const originalText = batch.items[j].text;
+              const translatedText = translations[j];
+
+              await setTextCache(originalText, translatedText, targetLang);
+              cachedResults.set(originalIndex, translatedText);
+            }
+
+            // 构建当前进度的翻译结果
+            const completedCount = cachedResults.size;
+            const allTranslations = texts.map((text, idx) => {
+              if (cachedResults.has(idx)) {
+                return cachedResults.get(idx);
+              }
+              return text;
+            });
 
             sendMsg(tabId, {
               type: 'PARTIAL_TRANSLATION_RESULT',
               data: {
                 success: true,
-                startIndex: batch.startIndex,
-                translations: translations,
-                progress: { done: batch.startIndex + translations.length, total: total }
+                startIndex: 0,
+                translations: allTranslations,
+                progress: { done: completedCount, total: total }
               }
             });
           } catch (e) {
             console.error(`批次${batchIndex}失败:`, e);
+            // 失败时用原文
+            for (const item of batch.items) {
+              cachedResults.set(item.index, item.text);
+            }
             sendMsg(tabId, {
               type: 'PARTIAL_TRANSLATION_RESULT',
-              data: { success: false, startIndex: batch.startIndex, translations: batch.texts, error: e.message }
+              data: {
+                success: false,
+                startIndex: 0,
+                translations: texts.map((text, idx) => cachedResults.get(idx) || text),
+                error: e.message
+              }
             });
           } finally {
             running--;
@@ -216,13 +295,35 @@ async function translatePageParallel(data, tabId) {
 
 async function translateSelection(data, tabId) {
   const settings = await getSettings();
+  const targetLang = settings.targetLang;
+
+  // 先查缓存
+  const cached = await getTextCache(data.text, targetLang);
+  if (cached !== null) {
+    console.log('划词翻译命中缓存');
+    sendMsg(tabId, {
+      type: 'SELECTION_TRANSLATION_RESULT',
+      data: { success: true, translated: cached, rect: data.rect }
+    });
+    return;
+  }
+
+  // 未命中则调用 API
   const translated = await translate(data.text, settings, null);
-  sendMsg(tabId, { type: 'SELECTION_TRANSLATION_RESULT', data: { success: true, translated, rect: data.rect } });
+
+  // 存入缓存
+  await setTextCache(data.text, translated, targetLang);
+
+  sendMsg(tabId, {
+    type: 'SELECTION_TRANSLATION_RESULT',
+    data: { success: true, translated, rect: data.rect }
+  });
 }
 
 async function translate(text, settings, separator) {
   const lang = LANGUAGE_MAP[settings.targetLang] || settings.targetLang;
-  const model = MODELS[settings.model] || 'glm-3-turbo';
+  const modelConfig = MODELS[settings.model] || MODELS['GLM-3-Turbo'];
+  const model = modelConfig.api;
 
   let prompt;
   if (separator) {
@@ -267,11 +368,10 @@ async function sendMsg(tabId, msg) {
 async function checkApiKey() { const s = await getSettings(); return !!s.apiKey; }
 
 async function getSettings() {
-  return new Promise(r => chrome.storage.local.get(['apiKey', 'targetLang', 'model', 'maxConcurrency', 'filterNodes'], res => r({
+  return new Promise(r => chrome.storage.local.get(['apiKey', 'targetLang', 'model', 'filterNodes'], res => r({
     apiKey: res.apiKey || '',
     targetLang: res.targetLang || 'zh-CN',
     model: res.model || 'GLM-3-Turbo',
-    maxConcurrency: res.maxConcurrency || 5,
     filterNodes: res.filterNodes !== false
   })));
 }

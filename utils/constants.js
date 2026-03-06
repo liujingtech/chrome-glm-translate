@@ -1,10 +1,10 @@
 // utils/constants.js
 
 const MODELS = {
-  'GLM-3-Turbo': 'glm-3-turbo',
-  'GLM-4': 'glm-4',
-  'GLM-4-AIR': 'glm-4-air',
-  'GLM-4-FLASH': 'glm-4-flash'
+  'GLM-3-Turbo': { api: 'glm-3-turbo', maxConcurrency: 50 },
+  'GLM-4-FLASH': { api: 'glm-4-flash', maxConcurrency: 50 },
+  'GLM-4-AIR': { api: 'glm-4-air', maxConcurrency: 100 },
+  'GLM-4': { api: 'glm-4', maxConcurrency: 30 }
 };
 
 const MODEL_NAMES = Object.keys(MODELS);
@@ -38,14 +38,13 @@ const DEFAULT_SETTINGS = {
   apiKey: '',
   targetLang: 'zh-CN',
   model: 'GLM-3-Turbo',
-  filterNodes: true,
-  maxConcurrency: 5
+  filterNodes: true
 };
 
 const SKIP_TAGS = ['SCRIPT', 'STYLE', 'INPUT', 'TEXTAREA', 'NOSCRIPT', 'SVG', 'SELECT', 'BUTTON', 'IFRAME'];
 
 function getModelIndex(name) {
-  return MODELS[name] || 'glm-3-turbo';
+  return MODELS[name]?.api || 'glm-3-turbo';
 }
 
 function getLanguageName(code) {
