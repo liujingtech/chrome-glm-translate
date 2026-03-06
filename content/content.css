@@ -1,22 +1,5 @@
 /* content/content.css */
 
-/* 双语对照译文样式 */
-.zhipu-translation-wrapper {
-  margin: 0;
-  padding: 0;
-  padding-left: 12px;
-  border-left: 3px solid #1890ff;
-  background: transparent;
-  font-size: inherit;
-  line-height: inherit;
-  color: #666;
-}
-
-.zhipu-translation-content {
-  word-wrap: break-word;
-  white-space: pre-wrap;
-}
-
 /* 选中内容翻译弹窗 */
 .zhipu-selection-popup {
   position: absolute;

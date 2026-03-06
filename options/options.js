@@ -1,6 +1,5 @@
 // options/options.js
 
-// 语言列表
 const LANGUAGES = [
   { code: 'zh-CN', name: '简体中文' },
   { code: 'zh-TW', name: '繁体中文' },
@@ -13,21 +12,20 @@ const LANGUAGES = [
   { code: 'ru', name: '俄语' }
 ];
 
-// 模型列表
 const MODELS = [
   { value: 'GLM-4-FLASH', name: 'GLM-4-FLASH (快速)' },
   { value: 'GLM-4-AIR', name: 'GLM-4-AIR (平衡)' },
   { value: 'GLM-4', name: 'GLM-4 (最佳)' }
 ];
 
-// 默认设置
 const DEFAULT_SETTINGS = {
   apiKey: '',
   targetLang: 'zh-CN',
-  model: 'GLM-4-FLASH'
+  model: 'GLM-4-FLASH',
+  filterNodes: true,
+  maxConcurrency: 5
 };
 
-// 初始化
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
   initLanguageSelect();
@@ -35,73 +33,57 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
 });
 
-// 加载设置
 async function loadSettings() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['apiKey', 'targetLang', 'model'], (result) => {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['apiKey', 'targetLang', 'model', 'filterNodes', 'maxConcurrency'], (result) => {
       document.getElementById('apiKey').value = result.apiKey || '';
-      window.currentSettings = {
-        targetLang: result.targetLang || DEFAULT_SETTINGS.targetLang,
-        model: result.model || DEFAULT_SETTINGS.model
-      };
+      document.getElementById('targetLang').value = result.targetLang || 'zh-CN';
+      document.getElementById('model').value = result.model || 'GLM-4-FLASH';
+      document.getElementById('filterNodes').checked = result.filterNodes !== false;
+      document.getElementById('maxConcurrency').value = result.maxConcurrency || 5;
       resolve();
     });
   });
 }
 
-// 初始化语言选择器
 function initLanguageSelect() {
   const select = document.getElementById('targetLang');
   select.innerHTML = '';
-
   LANGUAGES.forEach(lang => {
     const option = document.createElement('option');
     option.value = lang.code;
     option.textContent = lang.name;
-    if (lang.code === window.currentSettings.targetLang) {
+    if (lang.code === document.getElementById('targetLang').value) {
       option.selected = true;
-    }
+      }
     select.appendChild(option);
   });
 }
 
-// 初始化模型选择器
 function initModelSelect() {
   const select = document.getElementById('model');
   select.innerHTML = '';
-
   MODELS.forEach(model => {
     const option = document.createElement('option');
     option.value = model.value;
     option.textContent = model.name;
-    if (model.value === window.currentSettings.model) {
+    if (model.value === document.getElementById('model').value) {
       option.selected = true;
-    }
+      }
     select.appendChild(option);
   });
 }
 
-// 绑定事件
 function bindEvents() {
-  // 验证API Key
   document.getElementById('verifyApiKey').addEventListener('click', verifyApiKey);
-
-  // 保存设置
   document.getElementById('saveSettings').addEventListener('click', saveSettings);
-
-  // 打开快捷键设置
   document.getElementById('openShortcuts').addEventListener('click', () => {
     chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
   });
-
-  // 清除缓存
   document.getElementById('clearCache').addEventListener('click', clearCache);
-
-  // 重置设置
   document.getElementById('resetSettings').addEventListener('click', resetSettings);
 }
 
-// 验证API Key
 async function verifyApiKey() {
   const apiKey = document.getElementById('apiKey').value.trim();
   const statusEl = document.getElementById('apiKeyStatus');
@@ -117,15 +99,8 @@ async function verifyApiKey() {
   try {
     const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'glm-4-flash',
-        messages: [{ role: 'user', content: 'Hi' }],
-        max_tokens: 1
-      })
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: 'glm-4-flash', messages: [{ role: 'user', content: 'Hi' }], max_tokens: 1 })
     });
 
     if (response.ok) {
@@ -139,34 +114,29 @@ async function verifyApiKey() {
   }
 }
 
-// 保存设置
 async function saveSettings() {
   const settings = {
     apiKey: document.getElementById('apiKey').value.trim(),
     targetLang: document.getElementById('targetLang').value,
-    model: document.getElementById('model').value
+    model: document.getElementById('model').value,
+    filterNodes: document.getElementById('filterNodes').checked,
+    maxConcurrency: parseInt(document.getElementById('maxConcurrency').value) || 5
   };
 
   const statusEl = document.getElementById('saveStatus');
 
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     chrome.storage.local.set(settings, () => {
       showStatus(statusEl, '设置已保存', 'success');
-      setTimeout(() => {
-        statusEl.textContent = '';
-      }, 2000);
+      setTimeout(() => { statusEl.textContent = ''; }, 2000);
       resolve();
     });
   });
 }
 
-// 清除缓存
 async function clearCache() {
-  if (!confirm('确定要清除所有翻译缓存吗？')) {
-    return;
-  }
-
-  return new Promise((resolve) => {
+  if (!confirm('确定要清除所有翻译缓存吗？')) return;
+  return new Promise(resolve => {
     chrome.storage.local.set({ cache: {} }, () => {
       alert('缓存已清除');
       resolve();
@@ -174,25 +144,16 @@ async function clearCache() {
   });
 }
 
-// 重置设置
 async function resetSettings() {
-  if (!confirm('确定要重置所有设置吗？这将清除API Key和所有配置。')) {
-    return;
-  }
-
-  return new Promise((resolve) => {
-    chrome.storage.local.set({
-      ...DEFAULT_SETTINGS,
-      cache: {}
-    }, () => {
-      // 重新加载页面
+  if (!confirm('确定要重置所有设置吗？')) return;
+  return new Promise(resolve => {
+    chrome.storage.local.set({ ...DEFAULT_SETTINGS, cache: {} }, () => {
       location.reload();
       resolve();
     });
   });
 }
 
-// 显示状态消息
 function showStatus(element, message, type) {
   element.textContent = message;
   element.className = `status-message ${type}`;

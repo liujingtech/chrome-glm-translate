@@ -1,16 +1,13 @@
 // utils/constants.js
 
-// 智谱API模型映射
 const MODELS = {
   'GLM-4': 'glm-4',
   'GLM-4-AIR': 'glm-4-air',
   'GLM-4-FLASH': 'glm-4-flash'
 };
 
-// 模型显示名称列表
 const MODEL_NAMES = Object.keys(MODELS);
 
-// 支持的目标语言
 const LANGUAGES = [
   { code: 'zh-CN', name: '简体中文' },
   { code: 'zh-TW', name: '繁体中文' },
@@ -23,7 +20,6 @@ const LANGUAGES = [
   { code: 'ru', name: '俄语' }
 ];
 
-// 语言代码到名称的映射
 const LANGUAGE_MAP = {
   'zh-CN': '简体中文',
   'zh-TW': '繁体中文',
@@ -40,21 +36,17 @@ const LANGUAGE_MAP = {
 const DEFAULT_SETTINGS = {
   apiKey: '',
   targetLang: 'zh-CN',
-  model: 'GLM-4-FLASH'
+  model: 'GLM-4-FLASH',
+  filterNodes: true,
+  maxConcurrency: 5
 };
 
-// 智能过滤跳过的标签（精简版，只跳过真正的非内容元素）
 const SKIP_TAGS = ['SCRIPT', 'STYLE', 'INPUT', 'TEXTAREA', 'NOSCRIPT', 'SVG', 'SELECT', 'BUTTON', 'IFRAME'];
 
-// 智谱API端点
-const API_ENDPOINT = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-
-// 获取模型API索引
-function getModelIndex(modelName) {
-  return MODELS[modelName] || 'glm-4-flash';
+function getModelIndex(name) {
+  return MODELS[name] || 'glm-4-flash';
 }
 
-// 获取语言名称
 function getLanguageName(code) {
   return LANGUAGE_MAP[code] || code;
 }

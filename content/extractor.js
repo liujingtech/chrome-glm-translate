@@ -9,15 +9,17 @@ const MAIN_SELECTORS = [
   'article', 'main', '[role="main"]', '.content', '#content'
 ];
 
-function shouldSkip(el) {
+function shouldSkip(el, strict = true) {
   if (!el || !el.tagName) return true;
   const tag = el.tagName;
   if (['SCRIPT', 'STYLE', 'INPUT', 'TEXTAREA', 'NOSCRIPT', 'SVG', 'SELECT', 'BUTTON', 'IFRAME'].includes(tag)) return true;
 
-  const cls = (el.className || '').toString().toLowerCase();
-  const id = (el.id || '').toLowerCase();
-  for (const p of SKIP_PATTERNS) {
-    if ((cls + ' ' + id).includes(p.toLowerCase())) return true;
+  if (strict) {
+    const cls = (el.className || '').toString().toLowerCase();
+    const id = (el.id || '').toLowerCase();
+    for (const p of SKIP_PATTERNS) {
+      if ((cls + ' ' + id).includes(p.toLowerCase())) return true;
+    }
   }
   return false;
 }
@@ -25,6 +27,9 @@ function shouldSkip(el) {
 function extractPageTexts() {
   console.log('extractPageTexts 开始');
   const nodes = [];
+
+  // 获取filterNodes设置（同步从全局变量或默认true）
+  const filterNodes = typeof window.filterNodesEnabled !== 'undefined' ? window.filterNodesEnabled : true;
 
   // 找主内容区
   let mainArea = null;
@@ -48,19 +53,21 @@ function extractPageTexts() {
 
     // 只检查直接父元素
     const p = n.parentElement;
-    if (!p || shouldSkip(p)) { skipped++; continue; }
+    if (!p || shouldSkip(p, filterNodes)) { skipped++; continue; }
     if (p.dataset?.translated === 'true') { skipped++; continue; }
 
     // 检查文本
     const txt = (n.textContent || '').trim();
     if (!txt || txt.length < 2) { skipped++; continue; }
-    if (/^\d+$/.test(txt)) { skipped++; continue; }  // 纯数字跳过
-    if (/^[^\w\u4e00-\u9fff]+$/.test(txt)) { skipped++; continue; }  // 只有符号
+    if (filterNodes) {
+      if (/^\d+$/.test(txt)) { skipped++; continue; }  // 纯数字跳过
+      if (/^[^\w\u4e00-\u9fff]+$/.test(txt)) { skipped++; continue; }  // 只有符号
+    }
 
     nodes.push({ node: n, text: txt, parent: p });
   }
 
-  console.log('总节点:', total, '跳过:', skipped, '有效:', nodes.length);
+  console.log('总节点:', total, '跳过:', skipped, '有效:', nodes.length, '过滤模式:', filterNodes ? '严格' : '宽松');
   return nodes;
 }
 

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4F46E5"/>
+      <stop offset="100%" style="stop-color:#06B6D4"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background -->
+  <rect width="128" height="128" rx="24" fill="url(#bg)"/>
+  <!-- Letter "A" (left side, smaller) -->
+  <text x="24" y="82" font-family="Arial, sans-serif" font-size="52" font-weight="bold" fill="white" opacity="0.9">A</text>
+  <!-- Arrow -->
+  <path d="M58 64 L70 64 L70 58 L82 68 L70 78 L70 72 L58 72 Z" fill="white" opacity="0.85"/>
+  <!-- Character "文" (right side, larger) -->
+  <text x="72" y="96" font-family="Arial, sans-serif" font-size="56" font-weight="bold" fill="white">文</text>
+</svg>

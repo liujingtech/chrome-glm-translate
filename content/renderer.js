@@ -1,35 +1,23 @@
 // content/renderer.js
 
-// 为单个文本节点渲染双语对照
-function renderBilingual(textNode, translatedText) {
-  const parent = textNode.parentElement;
+// 直接替换原文为译文
+function replaceText(textNode, translatedText) {
+  if (!textNode || !textNode.parentElement) return null;
 
-  // 创建译文容器
-  const translationWrapper = document.createElement('div');
-  translationWrapper.className = 'zhipu-translation-wrapper';
-  translationWrapper.dataset.translated = 'true';
+  // 保存原文（用于可能的恢复功能）
+  textNode._originalText = textNode.textContent;
 
-  const translationContent = document.createElement('div');
-  translationContent.className = 'zhipu-translation-content';
-  translationContent.textContent = translatedText;
+  // 直接替换文本
+  textNode.textContent = translatedText;
 
-  translationWrapper.appendChild(translationContent);
+  // 标记父元素已翻译
+  textNode.parentElement.dataset.translated = 'true';
 
-  // 在原文节点后插入译文
-  if (textNode.nextSibling) {
-    parent.insertBefore(translationWrapper, textNode.nextSibling);
-  } else {
-    parent.appendChild(translationWrapper);
-  }
-
-  // 标记原文父元素
-  parent.dataset.translated = 'true';
-
-  return translationWrapper;
+  return textNode;
 }
 
-// 批量渲染双语对照
-function renderBilingualBatch(textNodes, translatedTexts) {
+// 批量替换文本
+function replaceTextBatch(textNodes, translatedTexts) {
   const results = [];
 
   for (let i = 0; i < textNodes.length; i++) {
@@ -38,19 +26,27 @@ function renderBilingualBatch(textNodes, translatedTexts) {
 
     if (translated && translated !== item.text) {
       try {
-        const wrapper = renderBilingual(item.node, translated);
+        replaceText(item.node, translated);
         results.push({
           original: item.text,
-          translated: translated,
-          wrapper: wrapper
+          translated: translated
         });
       } catch (e) {
-        console.warn('渲染译文失败:', e);
+        console.warn('替换文本失败:', e);
       }
     }
   }
 
   return results;
+}
+
+// 保留旧函数名兼容（内部调用替换）
+function renderBilingual(textNode, translatedText, settings = {}) {
+  return replaceText(textNode, translatedText);
+}
+
+function renderBilingualBatch(textNodes, translatedTexts, settings = {}) {
+  return replaceTextBatch(textNodes, translatedTexts);
 }
 
 // 显示选中内容的翻译弹窗
@@ -111,7 +107,17 @@ function hideSelectionPopup() {
 
 // 移除所有翻译（恢复原页面）
 function removeAllTranslations() {
-  // 移除所有译文容器
+  // 恢复原文（如果保存了）
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+  let n;
+  while (n = walker.nextNode()) {
+    if (n._originalText) {
+      n.textContent = n._originalText;
+      delete n._originalText;
+    }
+  }
+
+  // 移除旧的译文容器（兼容旧版本）
   const wrappers = document.querySelectorAll('.zhipu-translation-wrapper');
   wrappers.forEach(wrapper => wrapper.remove());
 

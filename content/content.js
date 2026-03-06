@@ -44,11 +44,23 @@ async function handleMessage(msg, sender, sendRes) {
   } catch (e) { console.error('处理失败:', e); sendRes({ success: false }); }
 }
 
-function handleTranslatePage() {
+async function handleTranslatePage() {
   showProgressBar();
   removeAllTranslations();
   translatedIndices.clear();
   completedBatches = 0;
+
+  // 获取过滤设置
+  try {
+    const response = await new Promise(resolve => {
+      chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, resolve);
+    });
+    if (response?.success && response.data) {
+      window.filterNodesEnabled = response.data.filterNodes !== false;
+    }
+  } catch (e) {
+    console.warn('获取设置失败，使用默认值');
+  }
 
   const textNodes = extractPageTexts();
   if (textNodes.length === 0) {
@@ -97,9 +109,8 @@ function handlePartialResult(data) {
     const trans = translations[i];
     if (item?.node?.parentElement) {
       try {
-        // 翻译失败或内容相同时可能不渲染
         if (trans && trans !== item.text) {
-          renderBilingual(item.node, trans);
+          replaceText(item.node, trans);
         }
         translatedIndices.add(idx);
       } catch (e) {}

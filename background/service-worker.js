@@ -54,12 +54,13 @@ async function handleMsg(msg, sender, sendRes) {
   }
 }
 
-// 并行翻译页面
+// 并行翻译页面（带并发限制）
 async function translatePageParallel(data, tabId) {
   const settings = await getSettings();
   const texts = data.texts;
   const total = texts.length;
   const batchSize = 20;
+  const maxConcurrency = settings.maxConcurrency || 5;
   const batches = [];
 
   // 分批
@@ -67,43 +68,59 @@ async function translatePageParallel(data, tabId) {
     batches.push({ startIndex: i, texts: texts.slice(i, i + batchSize) });
   }
 
-  console.log(`并行翻译: ${total}个文本, ${batches.length}个批次`);
+  console.log(`并行翻译: ${total}个文本, ${batches.length}个批次, 并发数: ${maxConcurrency}`);
 
-  // 并行发送所有批次
-  const promises = batches.map(async (batch, batchIndex) => {
-    try {
-      const SEP = `<<S${batchIndex}E>>`;
-      const joined = batch.texts.join('\n' + SEP + '\n');
-      const translated = await translate(joined, settings, SEP);
-      const parts = translated.split(SEP);
-      const translations = parts.map(p => p.trim());
+  // 使用并发控制的并行翻译
+  let running = 0;
+  let index = 0;
+  let hasError = false;
 
-      // 立即发送结果
-      sendMsg(tabId, {
-        type: 'PARTIAL_TRANSLATION_RESULT',
-        data: {
-          success: true,
-          startIndex: batch.startIndex,
-          translations: translations,
-          progress: { done: batch.startIndex + translations.length, total: total }
-        }
-      });
-    } catch (e) {
-      console.error(`批次${batchIndex}失败:`, e);
-      // 失败时用原文
-      sendMsg(tabId, {
-        type: 'PARTIAL_TRANSLATION_RESULT',
-        data: { success: false, startIndex: batch.startIndex, translations: batch.texts, error: e.message }
-      });
+  return new Promise((resolve) => {
+    function runNext() {
+      while (running < maxConcurrency && index < batches.length) {
+        const batchIndex = index++;
+        const batch = batches[batchIndex];
+        running++;
+
+        (async () => {
+          try {
+            const SEP = `<<S${batchIndex}E>>`;
+            const joined = batch.texts.join('\n' + SEP + '\n');
+            const translated = await translate(joined, settings, SEP);
+            const parts = translated.split(SEP);
+            const translations = parts.map(p => p.trim());
+
+            sendMsg(tabId, {
+              type: 'PARTIAL_TRANSLATION_RESULT',
+              data: {
+                success: true,
+                startIndex: batch.startIndex,
+                translations: translations,
+                progress: { done: batch.startIndex + translations.length, total: total }
+              }
+            });
+          } catch (e) {
+            console.error(`批次${batchIndex}失败:`, e);
+            sendMsg(tabId, {
+              type: 'PARTIAL_TRANSLATION_RESULT',
+              data: { success: false, startIndex: batch.startIndex, translations: batch.texts, error: e.message }
+            });
+          } finally {
+            running--;
+            if (index < batches.length) {
+              runNext();
+            } else if (running === 0) {
+              sendMsg(tabId, { type: 'TRANSLATION_COMPLETE' });
+              console.log('并行翻译完成');
+              resolve();
+            }
+          }
+        })();
+      }
     }
+
+    runNext();
   });
-
-  // 等待所有完成
-  await Promise.all(promises);
-
-  // 全部完成
-  sendMsg(tabId, { type: 'TRANSLATION_COMPLETE' });
-  console.log('并行翻译完成');
 }
 
 async function translateSelection(data, tabId) {
@@ -159,7 +176,13 @@ async function sendMsg(tabId, msg) {
 async function checkApiKey() { const s = await getSettings(); return !!s.apiKey; }
 
 async function getSettings() {
-  return new Promise(r => chrome.storage.local.get(['apiKey', 'targetLang', 'model'], res => r({ apiKey: res.apiKey || '', targetLang: res.targetLang || 'zh-CN', model: res.model || 'GLM-4-FLASH' })));
+  return new Promise(r => chrome.storage.local.get(['apiKey', 'targetLang', 'model', 'maxConcurrency', 'filterNodes'], res => r({
+    apiKey: res.apiKey || '',
+    targetLang: res.targetLang || 'zh-CN',
+    model: res.model || 'GLM-4-FLASH',
+    maxConcurrency: res.maxConcurrency || 5,
+    filterNodes: res.filterNodes !== false
+  })));
 }
 
 async function saveSettings(s) { return new Promise(r => chrome.storage.local.set(s, r)); }
