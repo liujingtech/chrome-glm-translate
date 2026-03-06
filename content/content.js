@@ -88,11 +88,12 @@ function handleTranslateSelection() {
 function handlePartialResult(data) {
   const { success, startIndex, translations, progress, error } = data;
 
-  // 更新批次进度
-  completedBatches++;
-  updateProgressBar(completedBatches, totalBatches, !success);
+  // 使用实际进度更新
+  if (progress) {
+    updateProgressBar(progress.done, progress.total, !success);
+  }
 
-  console.log('收到翻译结果:', { success, startIndex, transLen: translations?.length, nodesLen: currentTranslationNodes.length });
+  console.log('收到翻译结果:', { success, startIndex, transLen: translations?.length, nodesLen: currentTranslationNodes.length, progress });
 
   if (!success) {
     console.warn('批次失败:', error);
@@ -123,7 +124,7 @@ function handlePartialResult(data) {
 
     if (trans === item.text) {
       same++;
-      translatedIndices.add(idx);
+      // 不要添加到 translatedIndices，因为可能还没真正翻译
       continue;
     }
 

@@ -172,6 +172,7 @@ async function translatePageParallel(data, tabId) {
     const cached = await getTextCache(text, targetLang);
     if (cached !== null) {
       cachedResults.set(i, cached);
+      if (i < 3) console.log(`缓存命中 [${i}]: 原文="${text.substring(0, 30)}" -> 缓存="${cached.substring(0, 30)}"`);
     } else {
       uncachedItems.push({ index: i, text: text });
     }
@@ -228,11 +229,13 @@ async function translatePageParallel(data, tabId) {
             const SEP = `<<S${batchIndex}E>>`;
             const batchTexts = batch.items.map(item => item.text);
             const joined = batchTexts.join('\n' + SEP + '\n');
+            console.log(`批次${batchIndex} 请求原文:`, batchTexts.slice(0, 2));
             const translated = await translate(joined, settings, SEP);
+            console.log(`批次${batchIndex} API返回原文:`, translated.substring(0, 200));
             const parts = translated.split(SEP);
             const translations = parts.map(p => p.trim());
 
-            console.log(`批次${batchIndex}: 输入=${batchTexts.length}, 分割后=${translations.length}`);
+            console.log(`批次${batchIndex}: 输入=${batchTexts.length}, 分割后=${translations.length}, 翻译样例:`, translations.slice(0, 2));
 
             // 处理分割数量不匹配的情况
             if (translations.length !== batch.items.length) {
@@ -360,6 +363,8 @@ ${text}`;
 ${text}`;
   }
 
+  console.log(`API请求 prompt 前100字:`, prompt.substring(0, 100));
+
   const res = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.apiKey}` },
@@ -374,7 +379,9 @@ ${text}`;
     throw new Error(err.error?.message || 'API失败');
   }
   const data = await res.json();
-  return data.choices[0]?.message?.content || text;
+  const result = data.choices[0]?.message?.content || text;
+  console.log(`API返回 前100字:`, result.substring(0, 100));
+  return result;
 }
 
 async function sendMsg(tabId, msg) {
