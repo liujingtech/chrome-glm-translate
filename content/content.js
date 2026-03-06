@@ -1,179 +1,132 @@
 // content/content.js
 
-// 监听来自background的消息
+let currentTranslationNodes = [];
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handleMessage(message, sender, sendResponse);
-  return true; // 保持消息通道开放，支持异步响应
+  return true;
 });
 
-// 处理消息
 async function handleMessage(message, sender, sendResponse) {
   try {
     switch (message.type) {
       case 'TRANSLATE_PAGE':
-        await handleTranslatePage();
+        handleTranslatePage();
         sendResponse({ success: true });
         break;
-
       case 'TRANSLATE_SELECTION':
-        await handleTranslateSelection();
+        handleTranslateSelection();
         sendResponse({ success: true });
         break;
-
       case 'TRANSLATE_RESULT':
-        await handleTranslateResult(message.data);
+        handleTranslateResult(message.data);
         sendResponse({ success: true });
         break;
-
-      case 'REMOVE_TRANSLATIONS':
-        removeAllTranslations();
-        sendResponse({ success: true });
-        break;
-
       case 'SHOW_API_GUIDE':
         showApiKeyGuide();
         setupGuideEvents();
         sendResponse({ success: true });
         break;
-
       case 'SELECTION_TRANSLATION_RESULT':
         handleSelectionTranslationResult(message.data);
         sendResponse({ success: true });
         break;
-
       default:
-        sendResponse({ success: false, error: 'Unknown message type' });
+        sendResponse({ success: false });
     }
-  } catch (error) {
-    console.error('处理消息失败:', error);
-    sendResponse({ success: false, error: error.message });
+  } catch (e) {
+    console.error(e);
+    sendResponse({ success: false, error: e.message });
   }
 }
 
-// 处理整页翻译
-async function handleTranslatePage() {
+function handleTranslatePage() {
   showLoadingState();
+  removeAllTranslations();
 
-  try {
-    // 提取页面文本
-    const textNodes = extractPageTexts();
-
-    if (textNodes.length === 0) {
-      hideLoadingState();
-      showError('页面上没有可翻译的内容');
-      return;
-    }
-
-    // 分组处理
-    const groups = groupTextsForTranslation(textNodes);
-
-    // 发送翻译请求到background
-    chrome.runtime.sendMessage({
-      type: 'REQUEST_TRANSLATION',
-      data: {
-        groups: groups.map(group => group.map(item => item.text)),
-        url: window.location.href,
-        nodeCount: textNodes.length
-      }
-    });
-
-  } catch (error) {
+  const textNodes = extractPageTexts();
+  if (textNodes.length === 0) {
     hideLoadingState();
-    showError('翻译失败: ' + error.message);
-  }
-}
-
-// 处理选中内容翻译
-async function handleTranslateSelection() {
-  const selection = extractSelectedText();
-
-  if (!selection) {
-    showError('请先选择要翻译的内容');
+    showError('没有可翻译的内容');
     return;
   }
 
-  showLoadingState();
+  currentTranslationNodes = textNodes;
+  const texts = textNodes.map(item => item.text);
 
-  // 发送翻译请求到background
   chrome.runtime.sendMessage({
-    type: 'REQUEST_SELECTION_TRANSLATION',
-    data: {
-      text: selection.text,
-      rect: selection.rect
-    }
+    type: 'REQUEST_TRANSLATION',
+    data: { texts, url: location.href }
   });
 }
 
-// 处理翻译结果
-async function handleTranslateResult(data) {
-  hideLoadingState();
-
-  if (!data.success) {
-    showError(data.error || '翻译失败');
+function handleTranslateSelection() {
+  const sel = extractSelectedText();
+  if (!sel) {
+    showError('请先选择内容');
     return;
   }
-
-  // 重新提取页面文本节点以匹配
-  const textNodes = extractPageTexts();
-  const translatedTexts = data.translations;
-
-  // 渲染双语对照
-  renderBilingualBatch(textNodes, translatedTexts);
+  showLoadingState();
+  chrome.runtime.sendMessage({
+    type: 'REQUEST_SELECTION_TRANSLATION',
+    data: { text: sel.text, rect: sel.rect }
+  });
 }
 
-// 处理选中翻译结果
-function handleSelectionTranslationResult(data) {
+function handleTranslateResult(data) {
   hideLoadingState();
-
   if (!data.success) {
     showError(data.error || '翻译失败');
     return;
   }
 
+  const nodes = currentTranslationNodes;
+  const translations = data.translations;
+  if (!nodes || !translations) return;
+
+  for (let i = 0; i < Math.min(nodes.length, translations.length); i++) {
+    const item = nodes[i];
+    const translated = translations[i];
+    if (translated && item.node?.parentElement) {
+      try { renderBilingual(item.node, translated); } catch (e) {}
+    }
+  }
+  currentTranslationNodes = [];
+}
+
+function handleSelectionTranslationResult(data) {
+  hideLoadingState();
+  if (!data.success) {
+    showError(data.error || '翻译失败');
+    return;
+  }
   showSelectionPopup(data.translated, data.rect);
 }
 
-// 设置引导弹窗事件
 function setupGuideEvents() {
-  const submitBtn = document.getElementById('zhipu-guide-submit');
-  const apiInput = document.getElementById('zhipu-api-input');
+  const btn = document.getElementById('zhipu-guide-submit');
+  const input = document.getElementById('zhipu-api-input');
   const overlay = document.querySelector('.zhipu-guide-overlay');
 
-  if (submitBtn && apiInput) {
-    submitBtn.onclick = async () => {
-      const apiKey = apiInput.value.trim();
-      if (!apiKey) {
-        apiInput.focus();
-        return;
-      }
-
-      submitBtn.disabled = true;
-      submitBtn.textContent = '验证中...';
-
-      // 发送到background验证
-      chrome.runtime.sendMessage({
-        type: 'SAVE_API_KEY',
-        data: { apiKey }
-      }, (response) => {
-        if (response && response.success) {
+  if (btn && input) {
+    btn.onclick = () => {
+      const apiKey = input.value.trim();
+      if (!apiKey) { input.focus(); return; }
+      btn.disabled = true;
+      btn.textContent = '验证中...';
+      chrome.runtime.sendMessage({ type: 'SAVE_API_KEY', data: { apiKey } }, res => {
+        if (res?.success) {
           hideApiKeyGuide();
-          showSuccess('API Key配置成功！');
+          showSuccess('配置成功');
         } else {
-          submitBtn.disabled = false;
-          submitBtn.textContent = '保存并开始使用';
-          showError(response?.error || 'API Key验证失败');
+          btn.disabled = false;
+          btn.textContent = '保存并开始使用';
+          showError(res?.error || '验证失败');
         }
       });
     };
   }
-
-  // 点击遮罩关闭
-  if (overlay) {
-    overlay.onclick = hideApiKeyGuide;
-  }
+  if (overlay) overlay.onclick = hideApiKeyGuide;
 }
 
-// 初始化时清理可能存在的旧翻译（页面刷新时）
-window.addEventListener('load', () => {
-  removeAllTranslations();
-});
+window.addEventListener('load', removeAllTranslations);
