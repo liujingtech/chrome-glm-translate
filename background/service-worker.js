@@ -15,7 +15,6 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  console.log('右键菜单点击:', info.menuItemId);
   if (tab.url.startsWith('chrome://')) return;
   if (!await checkApiKey()) { sendMsg(tab.id, { type: 'SHOW_API_GUIDE' }); return; }
   if (info.menuItemId === 'translatePage') sendMsg(tab.id, { type: 'TRANSLATE_PAGE' });
@@ -28,15 +27,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendRes) => {
 });
 
 async function handleMsg(msg, sender, sendRes) {
-  console.log('收到消息:', msg.type);
   try {
     if (msg.type === 'REQUEST_TRANSLATION') {
-      console.log('开始翻译页面, 文本数:', msg.data?.texts?.length);
+      // 立即响应，后台继续翻译
+      sendRes({ success: true });
       await translatePage(msg.data, sender.tab.id);
-      sendRes({ success: true });
     } else if (msg.type === 'REQUEST_SELECTION_TRANSLATION') {
-      await translateSelection(msg.data, sender.tab.id);
       sendRes({ success: true });
+      await translateSelection(msg.data, sender.tab.id);
     } else if (msg.type === 'SAVE_API_KEY') {
       if (await validateApiKey(msg.data.apiKey)) {
         await saveSettings({ apiKey: msg.data.apiKey });
@@ -59,35 +57,63 @@ async function handleMsg(msg, sender, sendRes) {
   }
 }
 
+// 翻译页面 - 流式渲染
 async function translatePage(data, tabId) {
-  console.log('translatePage 开始');
   const settings = await getSettings();
   const texts = data.texts;
-  const translations = [];
-  const batchSize = 30;
+  const batchSize = 15; // 减小批次，更快响应
+  const totalBatches = Math.ceil(texts.length / batchSize);
+  let translatedCount = 0;
 
-  console.log('总文本数:', texts.length);
+  console.log('开始翻译, 总数:', texts.length, '批次:', totalBatches);
 
   for (let i = 0; i < texts.length; i += batchSize) {
+    const batchNum = Math.floor(i / batchSize) + 1;
     const batch = texts.slice(i, i + batchSize);
-    console.log('处理批次', Math.floor(i/batchSize) + 1, '数量:', batch.length);
 
-    // 使用唯一分隔符
-    const SEP = '<<<SEP' + Date.now() + '>>>';
-    const joined = batch.join('\n' + SEP + '\n');
-    const translated = await translate(joined, settings, SEP);
-    const parts = translated.split(SEP);
-    console.log('批次翻译结果数:', parts.length);
-    translations.push(...parts.map(p => p.trim()));
+    try {
+      const SEP = `<<<T${Date.now()}P>>>`;
+      const joined = batch.join('\n' + SEP + '\n');
+      const translated = await translate(joined, settings, SEP);
+      const parts = translated.split(SEP);
+      const translations = parts.map(p => p.trim());
+
+      translatedCount += translations.length;
+
+      // 立即发送这批结果，content script 会立即渲染
+      sendMsg(tabId, {
+        type: 'PARTIAL_TRANSLATION_RESULT',
+        data: {
+          success: true,
+          startIndex: i,
+          translations: translations,
+          progress: { current: batchNum, total: totalBatches, done: translatedCount, total: texts.length }
+        }
+      });
+
+      console.log(`批次 ${batchNum}/${totalBatches} 完成, 已翻译: ${translatedCount}/${texts.length}`);
+    } catch (e) {
+      console.error(`批次 ${batchNum} 失败:`, e);
+      // 失败时发送原文
+      sendMsg(tabId, {
+        type: 'PARTIAL_TRANSLATION_RESULT',
+        data: {
+          success: false,
+          startIndex: i,
+          translations: batch,
+          error: e.message
+        }
+      });
+    }
   }
 
-  console.log('翻译完成, 总数:', translations.length);
-  sendMsg(tabId, { type: 'TRANSLATE_RESULT', data: { success: true, translations } });
+  // 全部完成
+  sendMsg(tabId, { type: 'TRANSLATION_COMPLETE' });
+  console.log('翻译全部完成');
 }
 
 async function translateSelection(data, tabId) {
   const settings = await getSettings();
-  // 选中翻译不使用分隔符
   const translated = await translate(data.text, settings, null);
   sendMsg(tabId, { type: 'SELECTION_TRANSLATION_RESULT', data: { success: true, translated, rect: data.rect } });
 }
@@ -98,18 +124,12 @@ async function translate(text, settings, separator) {
 
   let prompt;
   if (separator) {
-    prompt = `请将以下内容翻译成${lang}。
-要求：
-1. 只返回翻译结果，不要任何解释
-2. 保持段落之间的分隔符 "${separator}"
-3. 每段内容独立翻译，不要合并
+    prompt = `翻译成${lang}，只返回翻译结果。
+段落间用"${separator}"分隔，必须保留这个分隔符，不要删除。
 
-内容：
 ${text}`;
   } else {
-    prompt = `请将以下内容翻译成${lang}，只返回翻译结果，不要任何解释：
-
-${text}`;
+    prompt = `翻译成${lang}，只返回翻译结果：\n${text}`;
   }
 
   const res = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
@@ -125,21 +145,20 @@ ${text}`;
     const errData = await res.json().catch(() => ({}));
     throw new Error(errData.error?.message || 'API请求失败');
   }
+
   const data = await res.json();
   return data.choices[0]?.message?.content || text;
 }
 
 async function sendMsg(tabId, msg) {
-  console.log('发送消息到tab:', tabId, msg.type);
   try {
     await chrome.tabs.sendMessage(tabId, msg);
   } catch (e) {
-    console.log('发送失败, 尝试注入...');
     try {
       await chrome.scripting.executeScript({ target: { tabId }, files: ['utils/constants.js', 'content/extractor.js', 'content/renderer.js', 'content/content.js'] });
       await chrome.scripting.insertCSS({ target: { tabId }, files: ['content/content.css'] });
       await chrome.tabs.sendMessage(tabId, msg);
-    } catch (err) { console.error('注入失败:', err); }
+    } catch (err) { console.error('发送失败:', err); }
   }
 }
 

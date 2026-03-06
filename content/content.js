@@ -1,6 +1,7 @@
 // content/content.js
 
 let currentTranslationNodes = [];
+let translatedIndices = new Set();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handleMessage(message, sender, sendResponse);
@@ -18,8 +19,12 @@ async function handleMessage(message, sender, sendResponse) {
         handleTranslateSelection();
         sendResponse({ success: true });
         break;
-      case 'TRANSLATE_RESULT':
-        handleTranslateResult(message.data);
+      case 'PARTIAL_TRANSLATION_RESULT':
+        handlePartialResult(message.data);
+        sendResponse({ success: true });
+        break;
+      case 'TRANSLATION_COMPLETE':
+        handleTranslationComplete();
         sendResponse({ success: true });
         break;
       case 'SHOW_API_GUIDE':
@@ -35,14 +40,15 @@ async function handleMessage(message, sender, sendResponse) {
         sendResponse({ success: false });
     }
   } catch (e) {
-    console.error(e);
-    sendResponse({ success: false, error: e.message });
+    console.error('处理失败:', e);
+    sendResponse({ success: false });
   }
 }
 
 function handleTranslatePage() {
   showLoadingState();
   removeAllTranslations();
+  translatedIndices.clear();
 
   const textNodes = extractPageTexts();
   if (textNodes.length === 0) {
@@ -54,6 +60,8 @@ function handleTranslatePage() {
   currentTranslationNodes = textNodes;
   const texts = textNodes.map(item => item.text);
 
+  console.log('请求翻译, 节点数:', texts.length);
+
   chrome.runtime.sendMessage({
     type: 'REQUEST_TRANSLATION',
     data: { texts, url: location.href }
@@ -62,10 +70,7 @@ function handleTranslatePage() {
 
 function handleTranslateSelection() {
   const sel = extractSelectedText();
-  if (!sel) {
-    showError('请先选择内容');
-    return;
-  }
+  if (!sel) { showError('请先选择内容'); return; }
   showLoadingState();
   chrome.runtime.sendMessage({
     type: 'REQUEST_SELECTION_TRANSLATION',
@@ -73,34 +78,65 @@ function handleTranslateSelection() {
   });
 }
 
-function handleTranslateResult(data) {
-  hideLoadingState();
+// 流式处理部分结果
+function handlePartialResult(data) {
   if (!data.success) {
-    showError(data.error || '翻译失败');
+    console.error('批次失败:', data.error);
     return;
   }
 
-  const nodes = currentTranslationNodes;
+  const startIndex = data.startIndex;
   const translations = data.translations;
-  if (!nodes || !translations) return;
+  const nodes = currentTranslationNodes;
+  const progress = data.progress;
 
-  for (let i = 0; i < Math.min(nodes.length, translations.length); i++) {
-    const item = nodes[i];
+  console.log(`渲染批次: ${startIndex} - ${startIndex + translations.length - 1}`);
+
+  // 更新进度
+  if (progress) {
+    updateProgress(progress);
+  }
+
+  // 立即渲染这批翻译
+  for (let i = 0; i < translations.length; i++) {
+    const nodeIndex = startIndex + i;
+    if (translatedIndices.has(nodeIndex)) continue;
+
+    const item = nodes[nodeIndex];
     const translated = translations[i];
-    if (translated && item.node?.parentElement) {
-      try { renderBilingual(item.node, translated); } catch (e) {}
+
+    if (translated && item?.node?.parentElement) {
+      try {
+        renderBilingual(item.node, translated);
+        translatedIndices.add(nodeIndex);
+      } catch (e) {
+        console.warn('渲染失败:', e);
+      }
     }
   }
+}
+
+function handleTranslationComplete() {
+  hideLoadingState();
+  console.log('翻译完成, 已渲染:', translatedIndices.size);
   currentTranslationNodes = [];
+  translatedIndices.clear();
 }
 
 function handleSelectionTranslationResult(data) {
   hideLoadingState();
-  if (!data.success) {
-    showError(data.error || '翻译失败');
-    return;
-  }
+  if (!data.success) { showError(data.error || '翻译失败'); return; }
   showSelectionPopup(data.translated, data.rect);
+}
+
+function updateProgress(progress) {
+  const loader = document.getElementById('zhipu-loading');
+  if (loader) {
+    const span = loader.querySelector('span');
+    if (span) {
+      span.textContent = `翻译中... ${progress.done}/${progress.total}`;
+    }
+  }
 }
 
 function setupGuideEvents() {
