@@ -1,7 +1,6 @@
 // content/extractor.js
 
-// 需要跳过的标签
-const SKIP_TAGS = ['SCRIPT', 'STYLE', 'CODE', 'PRE', 'INPUT', 'TEXTAREA', 'NOSCRIPT', 'KBD', 'SAMP', 'SVG'];
+// SKIP_TAGS 在 utils/constants.js 中定义，这里直接使用
 
 // 判断节点是否应该跳过
 function shouldSkipNode(node) {
