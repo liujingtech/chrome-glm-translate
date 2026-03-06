@@ -44,11 +44,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadSettings() {
   return new Promise(resolve => {
     chrome.storage.local.get(['apiKey', 'targetLang', 'model', 'filterNodes'], (result) => {
-    document.getElementById('apiKey').value = result.apiKey || '';
-    document.getElementById('targetLang').value = result.targetLang || 'zh-CN';
-    document.getElementById('model').value = result.model || 'GLM-3-Turbo';
-    document.getElementById('filterNodes').checked = result.filterNodes !== false;
-    resolve();
+      document.getElementById('apiKey').value = result.apiKey || '';
+      document.getElementById('targetLang').value = result.targetLang || 'zh-CN';
+      document.getElementById('model').value = result.model || 'GLM-3-Turbo';
+      document.getElementById('filterNodes').checked = result.filterNodes !== false;
+      resolve();
+    });
   });
 }
 function initLanguageSelect() {
