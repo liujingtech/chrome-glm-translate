@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "智谱翻译",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "基于智谱API的网页翻译插件，支持整页翻译和选中翻译",
   "permissions": [
     "contextMenus",
@@ -14,6 +14,7 @@
   },
   "content_scripts": [{
     "matches": ["<all_urls>"],
+    "run_at": "document_idle",
     "js": [
       "utils/constants.js",
       "content/extractor.js",
