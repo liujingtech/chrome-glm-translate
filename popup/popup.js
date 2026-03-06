@@ -14,7 +14,7 @@ const LANGUAGES = [
 ];
 
 // 模型列表
-const MODELS = ['GLM-4-FLASH', 'GLM-4-AIR', 'GLM-4'];
+const MODELS = ['GLM-3-Turbo', 'GLM-4-FLASH', 'GLM-4-AIR', 'GLM-4'];
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
@@ -30,7 +30,7 @@ async function loadSettings() {
     chrome.storage.local.get(['targetLang', 'model'], (result) => {
       window.currentSettings = {
         targetLang: result.targetLang || 'zh-CN',
-        model: result.model || 'GLM-4-FLASH'
+        model: result.model || 'GLM-3-Turbo'
       };
       resolve();
     });
