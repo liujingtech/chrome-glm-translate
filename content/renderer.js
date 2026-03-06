@@ -1,7 +1,10 @@
 // content/renderer.js
 
+if (typeof window.__ZHIPU_RENDERER_LOADED__ === 'undefined') {
+window.__ZHIPU_RENDERER_LOADED__ = true;
+
 // 直接替换原文为译文
-function replaceText(textNode, translatedText) {
+window.replaceText = function(textNode, translatedText) {
   if (!textNode || !textNode.parentElement) return null;
 
   // 保存原文（用于可能的恢复功能）
@@ -17,7 +20,7 @@ function replaceText(textNode, translatedText) {
 }
 
 // 批量替换文本
-function replaceTextBatch(textNodes, translatedTexts) {
+window.replaceTextBatch = function(textNodes, translatedTexts) {
   const results = [];
 
   for (let i = 0; i < textNodes.length; i++) {
@@ -26,7 +29,7 @@ function replaceTextBatch(textNodes, translatedTexts) {
 
     if (translated && translated !== item.text) {
       try {
-        replaceText(item.node, translated);
+        window.replaceText(item.node, translated);
         results.push({
           original: item.text,
           translated: translated
@@ -38,21 +41,21 @@ function replaceTextBatch(textNodes, translatedTexts) {
   }
 
   return results;
-}
+};
 
 // 保留旧函数名兼容（内部调用替换）
-function renderBilingual(textNode, translatedText, settings = {}) {
-  return replaceText(textNode, translatedText);
-}
+window.renderBilingual = function(textNode, translatedText, settings = {}) {
+  return window.replaceText(textNode, translatedText);
+};
 
-function renderBilingualBatch(textNodes, translatedTexts, settings = {}) {
-  return replaceTextBatch(textNodes, translatedTexts);
-}
+window.renderBilingualBatch = function(textNodes, translatedTexts, settings = {}) {
+  return window.replaceTextBatch(textNodes, translatedTexts);
+};
 
 // 显示选中内容的翻译弹窗
-function showSelectionPopup(text, rect) {
+window.showSelectionPopup = function(text, rect) {
   // 移除已存在的弹窗
-  hideSelectionPopup();
+  window.hideSelectionPopup();
 
   // 创建弹窗容器
   const popup = document.createElement('div');
@@ -68,7 +71,7 @@ function showSelectionPopup(text, rect) {
   const closeBtn = document.createElement('button');
   closeBtn.className = 'zhipu-popup-close';
   closeBtn.textContent = '×';
-  closeBtn.onclick = hideSelectionPopup;
+  closeBtn.onclick = window.hideSelectionPopup;
 
   popup.appendChild(closeBtn);
   popup.appendChild(content);
@@ -95,18 +98,18 @@ function showSelectionPopup(text, rect) {
   popup.style.left = `${left}px`;
 
   return popup;
-}
+};
 
 // 隐藏选中内容翻译弹窗
-function hideSelectionPopup() {
+window.hideSelectionPopup = function() {
   const popup = document.getElementById('zhipu-selection-popup');
   if (popup) {
     popup.remove();
   }
-}
+};
 
 // 移除所有翻译（恢复原页面）
-function removeAllTranslations() {
+window.removeAllTranslations = function() {
   // 恢复原文（如果保存了）
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
   let n;
@@ -122,34 +125,34 @@ function removeAllTranslations() {
   wrappers.forEach(wrapper => wrapper.remove());
 
   // 移除选中翻译弹窗
-  hideSelectionPopup();
+  window.hideSelectionPopup();
 
   // 移除translated标记
   const translatedElements = document.querySelectorAll('[data-translated="true"]');
   translatedElements.forEach(el => {
     delete el.dataset.translated;
   });
-}
+};
 
 // 显示加载状态
-function showLoadingState() {
+window.showLoadingState = function() {
   const loader = document.createElement('div');
   loader.id = 'zhipu-loading';
   loader.className = 'zhipu-loading';
   loader.innerHTML = '<div class="zhipu-spinner"></div><span>翻译中...</span>';
   document.body.appendChild(loader);
-}
+};
 
 // 隐藏加载状态
-function hideLoadingState() {
+window.hideLoadingState = function() {
   const loader = document.getElementById('zhipu-loading');
   if (loader) {
     loader.remove();
   }
-}
+};
 
 // 显示错误提示
-function showError(message) {
+window.showError = function(message) {
   const error = document.createElement('div');
   error.className = 'zhipu-error';
   error.textContent = message;
@@ -159,10 +162,10 @@ function showError(message) {
   setTimeout(() => {
     error.remove();
   }, 3000);
-}
+};
 
 // 显示成功提示
-function showSuccess(message) {
+window.showSuccess = function(message) {
   const success = document.createElement('div');
   success.className = 'zhipu-success';
   success.textContent = message;
@@ -171,10 +174,10 @@ function showSuccess(message) {
   setTimeout(() => {
     success.remove();
   }, 2000);
-}
+};
 
 // 显示首次使用引导弹窗
-function showApiKeyGuide() {
+window.showApiKeyGuide = function() {
   // 移除已存在的引导
   const existing = document.getElementById('zhipu-api-guide');
   if (existing) {
@@ -199,12 +202,14 @@ function showApiKeyGuide() {
   document.body.appendChild(guide);
 
   return guide;
-}
+};
 
 // 隐藏首次使用引导弹窗
-function hideApiKeyGuide() {
+window.hideApiKeyGuide = function() {
   const guide = document.getElementById('zhipu-api-guide');
   if (guide) {
     guide.remove();
   }
-}
+};
+
+} // end if
