@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智谱翻译</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <div class="popup-header">
+      <span class="popup-icon">🔤</span>
+      <span class="popup-title">智谱翻译</span>
+    </div>
+
+    <div class="popup-content">
+      <div class="setting-item">
+        <label>目标语言</label>
+        <select id="targetLang"></select>
+      </div>
+
+      <div class="setting-item">
+        <label>翻译模型</label>
+        <select id="model"></select>
+      </div>
+    </div>
+
+    <div class="popup-footer">
+      <a href="../options/options.html" id="openOptions" class="link-btn">
+        ⚙️ 完整设置
+      </a>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

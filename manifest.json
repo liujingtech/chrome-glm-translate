@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "智谱翻译",
+  "version": "1.0.0",
+  "description": "基于智谱API的网页翻译插件，支持整页翻译和选中翻译",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "activeTab"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": [
+      "utils/constants.js",
+      "content/extractor.js",
+      "content/renderer.js",
+      "content/content.js"
+    ],
+    "css": ["content/content.css"]
+  }],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "options/options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

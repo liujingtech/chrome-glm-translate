@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate Icons</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    canvas { border: 1px solid #ccc; margin: 10px; }
+    button { margin: 10px; padding: 10px 20px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Generate Plugin Icons</h1>
+  <p>Click buttons to download icons</p>
+
+  <div>
+    <canvas id="icon16" width="16" height="16"></canvas>
+    <button onclick="download('icon16', 16)">Download 16x16</button>
+  </div>
+
+  <div>
+    <canvas id="icon48" width="48" height="48"></canvas>
+    <button onclick="download('icon48', 48)">Download 48x48</button>
+  </div>
+
+  <div>
+    <canvas id="icon128" width="128" height="128"></canvas>
+    <button onclick="download('icon128', 128)">Download 128x128</button>
+  </div>
+
+  <script>
+    function drawIcon(canvasId, size) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext('2d');
+
+      // Background
+      ctx.fillStyle = '#1890ff';
+      ctx.fillRect(0, 0, size, size);
+
+      // Border radius (simulate rounded corners)
+      ctx.globalCompositeOperation = 'destination-in';
+      ctx.beginPath();
+      const radius = size * 0.2;
+      ctx.roundRect(0, 0, size, size, radius);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Text "译"
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${size * 0.5}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('译', size / 2, size / 2);
+    }
+
+    function download(canvasId, size) {
+      const canvas = document.getElementById(canvasId);
+      const link = document.createElement('a');
+      link.download = `icon${size}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Draw all icons on load
+    drawIcon('icon16', 16);
+    drawIcon('icon48', 48);
+    drawIcon('icon128', 128);
+  </script>
+</body>
+</html>

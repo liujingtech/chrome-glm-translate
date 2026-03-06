@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智谱翻译 - 设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="options-container">
+    <div class="options-header">
+      <h1>智谱翻译</h1>
+      <p>基于智谱GLM模型的网页翻译插件</p>
+    </div>
+
+    <!-- API配置 -->
+    <div class="options-section">
+      <h2>API配置</h2>
+      <div class="form-group">
+        <label for="apiKey">智谱API Key</label>
+        <div class="input-group">
+          <input type="password" id="apiKey" placeholder="请输入您的智谱API Key">
+          <button id="verifyApiKey" class="btn btn-secondary">验证</button>
+        </div>
+        <div class="form-hint">
+          <a href="https://open.bigmodel.cn/" target="_blank">获取API Key</a>
+        </div>
+        <div id="apiKeyStatus" class="status-message"></div>
+      </div>
+    </div>
+
+    <!-- 翻译设置 -->
+    <div class="options-section">
+      <h2>翻译设置</h2>
+      <div class="form-group">
+        <label for="targetLang">目标语言</label>
+        <select id="targetLang"></select>
+      </div>
+      <div class="form-group">
+        <label for="model">翻译模型</label>
+        <select id="model"></select>
+        <div class="form-hint">
+          <span>GLM-4-FLASH: 快速响应 | GLM-4-AIR: 平衡性能 | GLM-4: 最佳效果</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 快捷键设置 -->
+    <div class="options-section">
+      <h2>快捷键</h2>
+      <div class="form-group">
+        <label>键盘快捷键</label>
+        <button id="openShortcuts" class="btn btn-secondary">配置快捷键</button>
+        <div class="form-hint">
+          点击后在Chrome扩展快捷键设置页面配置
+        </div>
+      </div>
+    </div>
+
+    <!-- 其他设置 -->
+    <div class="options-section">
+      <h2>其他</h2>
+      <div class="form-group">
+        <button id="clearCache" class="btn btn-secondary">清除翻译缓存</button>
+      </div>
+      <div class="form-group">
+        <button id="resetSettings" class="btn btn-danger">重置所有设置</button>
+      </div>
+    </div>
+
+    <!-- 保存按钮 -->
+    <div class="options-footer">
+      <button id="saveSettings" class="btn btn-primary">保存设置</button>
+      <span id="saveStatus" class="status-message"></span>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

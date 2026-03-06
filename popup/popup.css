@@ -1,0 +1,96 @@
+/* popup/popup.css */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 280px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  color: #333;
+}
+
+.popup-container {
+  padding: 16px;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.popup-icon {
+  font-size: 20px;
+}
+
+.popup-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.popup-content {
+  margin-bottom: 16px;
+}
+
+.setting-item {
+  margin-bottom: 12px;
+}
+
+.setting-item:last-child {
+  margin-bottom: 0;
+}
+
+.setting-item label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #666;
+}
+
+.setting-item select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #333;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.setting-item select:focus {
+  outline: none;
+  border-color: #1890ff;
+}
+
+.setting-item select:hover {
+  border-color: #40a9ff;
+}
+
+.popup-footer {
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.link-btn {
+  display: block;
+  text-align: center;
+  padding: 8px 12px;
+  color: #1890ff;
+  text-decoration: none;
+  font-size: 13px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.link-btn:hover {
+  background: #f0f7ff;
+}
