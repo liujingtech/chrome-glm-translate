@@ -298,26 +298,34 @@ async function translateSelection(data, tabId) {
   const targetLang = settings.targetLang;
 
   // 先查缓存
-  const cached = await getTextCache(data.text, targetLang);
-  if (cached !== null) {
-    console.log('划词翻译命中缓存');
+  try {
+    const cached = await getTextCache(data.text, targetLang);
+    if (cached !== null) {
+      console.log('划词翻译命中缓存');
+      sendMsg(tabId, {
+        type: 'SELECTION_TRANSLATION_RESULT',
+        data: { success: true, translated: cached, rect: data.rect }
+      });
+      return;
+    }
+
+    // 未命中则调用 API
+    const translated = await translate(data.text, settings, null);
+
+    // 存入缓存
+    await setTextCache(data.text, translated, targetLang);
+
     sendMsg(tabId, {
       type: 'SELECTION_TRANSLATION_RESULT',
-      data: { success: true, translated: cached, rect: data.rect }
+      data: { success: true, translated, rect: data.rect }
     });
-    return;
+  } catch (error) {
+    console.error('划词翻译失败:', error);
+    sendMsg(tabId, {
+      type: 'SELECTION_TRANSLATION_RESULT',
+      data: { success: false, error: error.message, rect: data.rect }
+    });
   }
-
-  // 未命中则调用 API
-  const translated = await translate(data.text, settings, null);
-
-  // 存入缓存
-  await setTextCache(data.text, translated, targetLang);
-
-  sendMsg(tabId, {
-    type: 'SELECTION_TRANSLATION_RESULT',
-    data: { success: true, translated, rect: data.rect }
-  });
 }
 
 async function translate(text, settings, separator) {
