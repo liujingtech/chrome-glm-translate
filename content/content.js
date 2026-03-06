@@ -1,12 +1,9 @@
 // content/content.js
 
-if (typeof window.__ZHIPU_CONTENT_LOADED__ === 'undefined') {
-window.__ZHIPU_CONTENT_LOADED__ = true;
-
-window.currentTranslationNodes = [];
-window.translatedIndices = new Set();
-window.totalBatches = 0;
-window.completedBatches = 0;
+let currentTranslationNodes = [];
+let translatedIndices = new Set();
+let totalBatches = 0;
+let completedBatches = 0;
 
 chrome.runtime.onMessage.addListener((msg, sender, sendRes) => {
   handleMessage(msg, sender, sendRes);
@@ -50,8 +47,8 @@ async function handleMessage(msg, sender, sendRes) {
 async function handleTranslatePage() {
   showProgressBar();
   removeAllTranslations();
-  window.translatedIndices.clear();
-  window.completedBatches = 0;
+  translatedIndices.clear();
+  completedBatches = 0;
 
   // 获取过滤设置
   try {
@@ -72,11 +69,11 @@ async function handleTranslatePage() {
     return;
   }
 
-  window.currentTranslationNodes = textNodes;
-  window.totalBatches = Math.ceil(textNodes.length / 20);
-  updateProgressBar(0, window.totalBatches);
+  currentTranslationNodes = textNodes;
+  totalBatches = Math.ceil(textNodes.length / 20);
+  updateProgressBar(0, totalBatches);
 
-  console.log('翻译请求:', textNodes.length, '节点,', window.totalBatches, '批次');
+  console.log('翻译请求:', textNodes.length, '节点,', totalBatches, '批次');
 
   chrome.runtime.sendMessage({ type: 'REQUEST_TRANSLATION', data: { texts: textNodes.map(n => n.text) } });
 }
@@ -96,21 +93,21 @@ function handlePartialResult(data) {
     updateProgressBar(progress.done, progress.total, !success);
   }
 
-  console.log('收到翻译结果:', { success, startIndex, transLen: translations?.length, nodesLen: window.currentTranslationNodes.length, progress });
+  console.log('收到翻译结果:', { success, startIndex, transLen: translations?.length, nodesLen: currentTranslationNodes.length, progress });
 
   if (!success) {
     console.warn('批次失败:', error);
     return;
   }
 
-  const nodes = window.currentTranslationNodes;
+  const nodes = currentTranslationNodes;
   let rendered = 0;
   let skipped = 0;
   let same = 0;
 
   for (let i = 0; i < translations.length; i++) {
     const idx = startIndex + i;
-    if (window.translatedIndices.has(idx)) { skipped++; continue; }
+    if (translatedIndices.has(idx)) { skipped++; continue; }
 
     const item = nodes[idx];
     const trans = translations[i];
@@ -133,7 +130,7 @@ function handlePartialResult(data) {
 
     try {
       replaceText(item.node, trans);
-      window.translatedIndices.add(idx);
+      translatedIndices.add(idx);
       rendered++;
     } catch (e) {
       console.warn('渲染失败:', e);
@@ -145,9 +142,9 @@ function handlePartialResult(data) {
 
 function handleTranslationComplete() {
   hideProgressBar();
-  console.log('完成, 渲染:', window.translatedIndices.size);
-  window.currentTranslationNodes = [];
-  window.translatedIndices.clear();
+  console.log('完成, 渲染:', translatedIndices.size);
+  currentTranslationNodes = [];
+  translatedIndices.clear();
 }
 
 function handleSelectionResult(data) {
@@ -241,5 +238,3 @@ function setupGuideEvents() {
 }
 
 window.addEventListener('load', removeAllTranslations);
-
-} // end if

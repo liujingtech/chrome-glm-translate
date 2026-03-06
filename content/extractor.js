@@ -1,18 +1,15 @@
 // content/extractor.js
 
-if (typeof window.__ZHIPU_EXTRACTOR_LOADED__ === 'undefined') {
-window.__ZHIPU_EXTRACTOR_LOADED__ = true;
-
 console.log('extractor.js 加载');
 
-window.SKIP_PATTERNS = ['file-navigation', 'Box-header', 'Box-footer', 'jump-to-line'];
+const SKIP_PATTERNS = ['file-navigation', 'Box-header', 'Box-footer', 'jump-to-line'];
 
-window.MAIN_SELECTORS = [
+const MAIN_SELECTORS = [
   '.repository-content', '.readme', '.markdown-body', 'article.markdown-body',
   'article', 'main', '[role="main"]', '.content', '#content'
 ];
 
-window.shouldSkip = function(el, strict = true) {
+function shouldSkip(el, strict = true) {
   if (!el || !el.tagName) return true;
   const tag = el.tagName;
   if (['SCRIPT', 'STYLE', 'INPUT', 'TEXTAREA', 'NOSCRIPT', 'SVG', 'SELECT', 'BUTTON', 'IFRAME'].includes(tag)) return true;
@@ -20,14 +17,14 @@ window.shouldSkip = function(el, strict = true) {
   if (strict) {
     const cls = (el.className || '').toString().toLowerCase();
     const id = (el.id || '').toLowerCase();
-    for (const p of window.SKIP_PATTERNS) {
+    for (const p of SKIP_PATTERNS) {
       if ((cls + ' ' + id).includes(p.toLowerCase())) return true;
     }
   }
   return false;
-};
+}
 
-window.extractPageTexts = function() {
+function extractPageTexts() {
   console.log('extractPageTexts 开始');
   const nodes = [];
 
@@ -36,7 +33,7 @@ window.extractPageTexts = function() {
 
   // 找主内容区
   let mainArea = null;
-  for (const sel of window.MAIN_SELECTORS) {
+  for (const sel of MAIN_SELECTORS) {
     const el = document.querySelector(sel);
     if (el && el.textContent.trim().length > 50) {
       mainArea = el;
@@ -56,7 +53,7 @@ window.extractPageTexts = function() {
 
     // 只检查直接父元素
     const p = n.parentElement;
-    if (!p || window.shouldSkip(p, filterNodes)) { skipped++; continue; }
+    if (!p || shouldSkip(p, filterNodes)) { skipped++; continue; }
     if (p.dataset?.translated === 'true') { skipped++; continue; }
 
     // 检查文本
@@ -72,9 +69,9 @@ window.extractPageTexts = function() {
 
   console.log('总节点:', total, '跳过:', skipped, '有效:', nodes.length, '过滤模式:', filterNodes ? '严格' : '宽松');
   return nodes;
-};
+}
 
-window.extractSelectedText = function() {
+function extractSelectedText() {
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;
   const txt = sel.toString().trim();
@@ -84,8 +81,6 @@ window.extractSelectedText = function() {
     text: txt,
     rect: { top: rect.top + window.scrollY, left: rect.left + window.scrollX, width: rect.width, height: rect.height }
   };
-};
+}
 
 console.log('extractor.js 加载完成');
-
-} // end if

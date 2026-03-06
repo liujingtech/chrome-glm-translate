@@ -388,11 +388,7 @@ async function sendMsg(tabId, msg) {
   try {
     await chrome.tabs.sendMessage(tabId, msg);
   } catch (e) {
-    try {
-      await chrome.scripting.executeScript({ target: { tabId }, files: ['utils/constants.js', 'content/extractor.js', 'content/renderer.js', 'content/content.js'] });
-      await chrome.scripting.insertCSS({ target: { tabId }, files: ['content/content.css'] });
-      await chrome.tabs.sendMessage(tabId, msg);
-    } catch (err) { console.error('发送失败:', err); }
+    console.error('发送消息失败，请刷新页面后重试:', e);
   }
 }
 

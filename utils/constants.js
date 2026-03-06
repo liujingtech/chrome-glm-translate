@@ -1,17 +1,15 @@
 // utils/constants.js
-if (typeof window.__ZHIPU_CONSTANTS_LOADED__ === 'undefined') {
-window.__ZHIPU_CONSTANTS_LOADED__ = true;
 
-window.MODELS = {
+const MODELS = {
   'GLM-3-Turbo': { api: 'glm-3-turbo', maxConcurrency: 50 },
   'GLM-4-FLASH': { api: 'glm-4-flash', maxConcurrency: 50 },
   'GLM-4-AIR': { api: 'glm-4-air', maxConcurrency: 100 },
   'GLM-4': { api: 'glm-4', maxConcurrency: 30 }
 };
 
-window.MODEL_NAMES = Object.keys(window.MODELS);
+const MODEL_NAMES = Object.keys(MODELS);
 
-window.LANGUAGES = [
+const LANGUAGES = [
   { code: 'zh-CN', name: '简体中文' },
   { code: 'zh-TW', name: '繁体中文' },
   { code: 'en', name: '英语' },
@@ -23,7 +21,7 @@ window.LANGUAGES = [
   { code: 'ru', name: '俄语' }
 ];
 
-window.LANGUAGE_MAP = {
+const LANGUAGE_MAP = {
   'zh-CN': '简体中文',
   'zh-TW': '繁体中文',
   'en': '英语',
@@ -36,21 +34,19 @@ window.LANGUAGE_MAP = {
 };
 
 // 默认设置
-window.DEFAULT_SETTINGS = {
+const DEFAULT_SETTINGS = {
   apiKey: '',
   targetLang: 'zh-CN',
   model: 'GLM-3-Turbo',
   filterNodes: true
 };
 
-window.SKIP_TAGS = ['SCRIPT', 'STYLE', 'INPUT', 'TEXTAREA', 'NOSCRIPT', 'SVG', 'SELECT', 'BUTTON', 'IFRAME'];
+const SKIP_TAGS = ['SCRIPT', 'STYLE', 'INPUT', 'TEXTAREA', 'NOSCRIPT', 'SVG', 'SELECT', 'BUTTON', 'IFRAME'];
 
-window.getModelIndex = function(name) {
-  return window.MODELS[name]?.api || 'glm-3-turbo';
-};
+function getModelIndex(name) {
+  return MODELS[name]?.api || 'glm-3-turbo';
+}
 
-window.getLanguageName = function(code) {
-  return window.LANGUAGE_MAP[code] || code;
-};
-
-} // end if
+function getLanguageName(code) {
+  return LANGUAGE_MAP[code] || code;
+}
