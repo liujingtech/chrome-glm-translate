@@ -234,6 +234,18 @@ async function translatePageParallel(data, tabId) {
 
             console.log(`批次${batchIndex}: 输入=${batchTexts.length}, 分割后=${translations.length}`);
 
+            // 处理分割数量不匹配的情况
+            if (translations.length !== batch.items.length) {
+              console.warn(`批次${batchIndex} 分割数量不匹配: 期望${batch.items.length}, 实际${translations.length}`);
+              // 如果少了，用原文补齐；如果多了，只取前N个
+              while (translations.length < batch.items.length) {
+                translations.push(batch.items[translations.length].text);
+              }
+              if (translations.length > batch.items.length) {
+                translations.length = batch.items.length;
+              }
+            }
+
             // 存入缓存并合并到 cachedResults
             for (let j = 0; j < batch.items.length; j++) {
               const originalIndex = batch.items[j].index;
