@@ -1,29 +1,41 @@
 // content/extractor.js
 // 依赖: utils/constants.js (定义了 SKIP_TAGS)
 
-// 需要跳过的class/id关键词
+// 需要跳过的class/id关键词（更精确）
 const SKIP_PATTERNS = [
-  'nav', 'menu', 'sidebar', 'footer', 'header', 'banner', 'ad-', 'ads-',
-  'comment', 'reply', 'social', 'share', 'related', 'recommend'
+  'file-navigation', 'Box-header', 'Box-footer', 'jump-to-line',
+  'discussion-sidebar', 'timeline-comment-actions',
+  'reaction-popover', 'emoji-picker', 'hx_badge-icon'
 ];
 
-// 主要内容选择器
+// 主要内容选择器（按优先级）
 const MAIN_SELECTORS = [
-  'article', 'main', '[role="main"]', '.post-content', '.article-content',
-  '.entry-content', '.content', '.post', '.article', '.markdown-body'
+  // GitHub
+  '.repository-content', '.readme', '.markdown-body', '[data-target="readme"]',
+  'article.markdown-body', '.blob-wrapper', '.js-file-line-container',
+  // 通用
+  'article', 'main', '[role="main"]',
+  '.post-content', '.article-content', '.entry-content',
+  '.content-body', '.text-content',
+  // 最后备用
+  '#content', '#main', '.content'
 ];
 
 function shouldSkipElement(el) {
   if (!el || !el.tagName) return true;
-  // SKIP_TAGS 来自 constants.js
-  if (typeof SKIP_TAGS !== 'undefined' && SKIP_TAGS.includes(el.tagName)) return true;
+
+  // 使用 constants.js 中的 SKIP_TAGS
+  const skipTags = typeof SKIP_TAGS !== 'undefined' ? SKIP_TAGS :
+    ['SCRIPT', 'STYLE', 'CODE', 'PRE', 'INPUT', 'TEXTAREA', 'NOSCRIPT', 'KBD', 'SAMP', 'SVG', 'NAV', 'FOOTER', 'HEADER', 'ASIDE'];
+
+  if (skipTags.includes(el.tagName)) return true;
 
   const className = (el.className || '').toString().toLowerCase();
   const id = (el.id || '').toLowerCase();
   const combined = className + ' ' + id;
 
   for (const pattern of SKIP_PATTERNS) {
-    if (combined.includes(pattern)) return true;
+    if (combined.includes(pattern.toLowerCase())) return true;
   }
 
   try {
@@ -36,36 +48,50 @@ function shouldSkipElement(el) {
 
 function findMainContentAreas() {
   const areas = [];
+
   for (const selector of MAIN_SELECTORS) {
     try {
-      document.querySelectorAll(selector).forEach(el => {
-        if (!shouldSkipElement(el) && el.textContent.trim().length > 100) {
+      const elements = document.querySelectorAll(selector);
+      elements.forEach(el => {
+        if (!shouldSkipElement(el) && el.textContent.trim().length > 50) {
           areas.push(el);
         }
       });
+      if (areas.length > 0) break; // 找到就停止
     } catch (e) {}
   }
+
   return areas.length > 0 ? areas : [document.body];
 }
 
 function shouldSkipNode(node, mainAreas) {
   if (!node || !node.textContent) return true;
 
+  // 检查父元素
   let parent = node.parentElement;
-  while (parent) {
+  let depth = 0;
+  while (parent && depth < 20) {
     if (shouldSkipElement(parent)) return true;
+    if (parent.dataset?.translated === 'true') return true;
     parent = parent.parentElement;
+    depth++;
   }
 
   // 检查是否在主要内容区域外
   if (mainAreas && !mainAreas.includes(document.body)) {
-    let inMain = false, p = node.parentElement;
-    while (p) { if (mainAreas.includes(p)) { inMain = true; break; } p = p.parentElement; }
+    let inMain = false;
+    let p = node.parentElement;
+    while (p) {
+      if (mainAreas.includes(p)) { inMain = true; break; }
+      p = p.parentElement;
+    }
     if (!inMain) return true;
   }
 
   const text = node.textContent.trim();
-  if (!text || text.length < 2 || /^\d+$/.test(text)) return true;
+  if (!text || text.length < 2) return true;
+  if (/^\d+$/.test(text)) return true;  // 纯数字
+  if (/^[^\w\u4e00-\u9fff]*$/.test(text)) return true; // 无实际内容
 
   return false;
 }
@@ -73,7 +99,7 @@ function shouldSkipNode(node, mainAreas) {
 function extractPageTexts() {
   const textNodes = [];
   const mainAreas = findMainContentAreas();
-  console.log('主要内容区域:', mainAreas.length);
+  console.log('主要内容区域:', mainAreas.map(el => el.tagName + (el.className ? '.' + el.className.split(' ')[0] : '') + (el.id ? '#' + el.id : '')));
 
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
   let node;
@@ -87,7 +113,7 @@ function extractPageTexts() {
     }
   }
 
-  console.log('文本节点:', textNodes.length);
+  console.log('文本节点数量:', textNodes.length);
   return textNodes;
 }
 
