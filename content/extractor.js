@@ -2,7 +2,7 @@
 
 console.log('extractor.js 加载');
 
-const SKIP_PATTERNS = ['nav', 'menu', 'sidebar', 'footer', 'header', 'banner', 'ad-', 'comment', 'reply', 'social', 'share'];
+const SKIP_PATTERNS = ['file-navigation', 'Box-header', 'Box-footer', 'jump-to-line'];
 
 const MAIN_SELECTORS = [
   '.repository-content', '.readme', '.markdown-body', 'article.markdown-body',
@@ -17,19 +17,13 @@ function shouldSkip(el) {
   const cls = (el.className || '').toString().toLowerCase();
   const id = (el.id || '').toLowerCase();
   for (const p of SKIP_PATTERNS) {
-    if ((cls + ' ' + id).includes(p)) return true;
+    if ((cls + ' ' + id).includes(p.toLowerCase())) return true;
   }
   return false;
 }
 
-function isInView(el) {
-  if (!el) return false;
-  const r = el.getBoundingClientRect();
-  return r.bottom > -50 && r.top < window.innerHeight + 50;
-}
-
 function extractPageTexts() {
-  console.log('extractPageTexts 开始执行');
+  console.log('extractPageTexts 开始');
   const nodes = [];
 
   // 找主内容区
@@ -44,35 +38,26 @@ function extractPageTexts() {
   }
   if (!mainArea) mainArea = document.body;
 
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+  // 直接在主内容区遍历
+  const walker = document.createTreeWalker(mainArea, NodeFilter.SHOW_TEXT, null, false);
   let total = 0, skipped = 0;
   let n;
 
   while (n = walker.nextNode()) {
     total++;
 
-    // 检查父元素
-    let p = n.parentElement, skip = false;
-    while (p) {
-      if (shouldSkip(p)) { skip = true; break; }
-      if (p.dataset?.translated === 'true') { skip = true; break; }
-      p = p.parentElement;
-    }
-    if (skip) { skipped++; continue; }
+    // 只检查直接父元素
+    const p = n.parentElement;
+    if (!p || shouldSkip(p)) { skipped++; continue; }
+    if (p.dataset?.translated === 'true') { skipped++; continue; }
 
     // 检查文本
     const txt = (n.textContent || '').trim();
-    if (!txt || txt.length < 2 || /^\d+$/.test(txt)) { skipped++; continue; }
+    if (!txt || txt.length < 2) { skipped++; continue; }
+    if (/^\d+$/.test(txt)) { skipped++; continue; }  // 纯数字跳过
+    if (/^[^\w\u4e00-\u9fff]+$/.test(txt)) { skipped++; continue; }  // 只有符号
 
-    // 检查是否在主内容区和视口内
-    let inMain = false;
-    p = n.parentElement;
-    while (p) { if (p === mainArea) { inMain = true; break; } p = p.parentElement; }
-
-    if (!inMain) { skipped++; continue; }
-    if (!isInView(n.parentElement)) { skipped++; continue; }
-
-    nodes.push({ node: n, text: txt, parent: n.parentElement });
+    nodes.push({ node: n, text: txt, parent: p });
   }
 
   console.log('总节点:', total, '跳过:', skipped, '有效:', nodes.length);
