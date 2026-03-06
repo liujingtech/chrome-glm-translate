@@ -94,3 +94,14 @@ body {
 .link-btn:hover {
   background: #f0f7ff;
 }
+
+.save-status {
+  font-size: 12px;
+  margin-top: 8px;
+  text-align: center;
+  min-height: 16px;
+}
+
+.save-status.success {
+  color: #52c41a;
+}

@@ -104,6 +104,18 @@ function bindEvents() {
 // 保存设置
 async function saveSetting(key, value) {
   return new Promise((resolve) => {
-    chrome.storage.local.set({ [key]: value }, resolve);
+    chrome.storage.local.set({ [key]: value }, () => {
+      // 显示保存成功提示
+      const statusEl = document.getElementById('saveStatus');
+      if (statusEl) {
+        statusEl.textContent = '已保存';
+        statusEl.className = 'save-status success';
+        setTimeout(() => {
+          statusEl.textContent = '';
+          statusEl.className = 'save-status';
+        }, 1500);
+      }
+      resolve();
+    });
   });
 }
