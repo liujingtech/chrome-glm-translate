@@ -78,7 +78,6 @@ function handleTranslateSelection() {
   });
 }
 
-// 流式处理部分结果
 function handlePartialResult(data) {
   if (!data.success) {
     console.error('批次失败:', data.error);
@@ -90,14 +89,8 @@ function handlePartialResult(data) {
   const nodes = currentTranslationNodes;
   const progress = data.progress;
 
-  console.log(`渲染批次: ${startIndex} - ${startIndex + translations.length - 1}`);
+  if (progress) updateProgress(progress);
 
-  // 更新进度
-  if (progress) {
-    updateProgress(progress);
-  }
-
-  // 立即渲染这批翻译
   for (let i = 0; i < translations.length; i++) {
     const nodeIndex = startIndex + i;
     if (translatedIndices.has(nodeIndex)) continue;
@@ -109,9 +102,7 @@ function handlePartialResult(data) {
       try {
         renderBilingual(item.node, translated);
         translatedIndices.add(nodeIndex);
-      } catch (e) {
-        console.warn('渲染失败:', e);
-      }
+      } catch (e) { console.warn('渲染失败:', e); }
     }
   }
 }
@@ -132,10 +123,7 @@ function handleSelectionTranslationResult(data) {
 function updateProgress(progress) {
   const loader = document.getElementById('zhipu-loading');
   if (loader) {
-    const span = loader.querySelector('span');
-    if (span) {
-      span.textContent = `翻译中... ${progress.done}/${progress.total}`;
-    }
+    loader.innerHTML = `<span>翻译中... ${progress.done}/${progress.total}</span>`;
   }
 }
 
@@ -156,7 +144,7 @@ function setupGuideEvents() {
           showSuccess('配置成功');
         } else {
           btn.disabled = false;
-          btn.textContent = '保存并开始使用';
+          btn.textContent = '保存';
           showError(res?.error || '验证失败');
         }
       });
