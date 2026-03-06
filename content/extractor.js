@@ -1,16 +1,13 @@
 // content/extractor.js
 
-// 需要跳过的class/id关键词
-const SKIP_PATTERNS = [
-  'nav', 'menu', 'sidebar', 'footer', 'header', 'banner', 'ad-', 'ads-',
-  'comment', 'reply', 'social', 'share', 'related', 'recommend'
-];
+const SKIP_PATTERNS = ['nav', 'menu', 'sidebar', 'footer', 'header', 'banner', 'ad-', 'ads-', 'comment', 'reply', 'social', 'share', 'file-navigation', 'Box-header'];
 
-// 主要内容选择器
 const MAIN_SELECTORS = [
-  '.repository-content', '.readme', '.markdown-body', '[data-target="readme"]',
-  'article', 'main', '[role="main"]', '.post-content', '.article-content',
-  '.entry-content', '.content', '.post', '.article', '#content', '#main'
+  // GitHub 特定
+  '.repository-content', '.readme', '.markdown-body', 'article.markdown-body',
+  '[data-target="readme"]', '.js-file-line-container', '.blob-wrapper-embedded',
+  // 通用
+  'article', 'main', '[role="main"]', '.content', '#content', '.post', '.article'
 ];
 
 function shouldSkipElement(el) {
@@ -21,8 +18,8 @@ function shouldSkipElement(el) {
   const className = (el.className || '').toString().toLowerCase();
   const id = (el.id || '').toLowerCase();
   const combined = className + ' ' + id;
-  for (const pattern of SKIP_PATTERNS) {
-    if (combined.includes(pattern)) return true;
+  for (const p of SKIP_PATTERNS) {
+    if (combined.includes(p)) return true;
   }
 
   try {
@@ -33,79 +30,92 @@ function shouldSkipElement(el) {
 }
 
 function isInViewport(el) {
+  if (!el) return false;
   const rect = el.getBoundingClientRect();
-  return rect.top < window.innerHeight && rect.bottom > 0 &&
-         rect.left < window.innerWidth && rect.right > 0;
+  // 放宽视口判断 - 只要有一部分在视口内就算
+  return rect.bottom > -100 && rect.top < window.innerHeight + 100 &&
+         rect.right > -100 && rect.left < window.innerWidth + 100;
 }
 
 function findMainContentAreas() {
   for (const selector of MAIN_SELECTORS) {
     try {
-      const el = document.querySelector(selector);
-      if (el && !shouldSkipElement(el) && el.textContent.trim().length > 100) {
-        return [el];
+      const els = document.querySelectorAll(selector);
+      console.log('选择器', selector, '找到', els.length, '个');
+      for (const el of els) {
+        if (!shouldSkipElement(el) && el.textContent.trim().length > 50) {
+          console.log('使用主区域:', selector);
+          return [el];
+        }
       }
     } catch (e) {}
   }
+  console.log('使用 body');
   return [document.body];
 }
 
 function shouldSkipNode(node, mainAreas) {
-  if (!node || !node.textContent) return true;
+  if (!node || node.nodeType !== 3) return true;
 
   let parent = node.parentElement;
+  const path = [];
   while (parent) {
+    path.push(parent.tagName);
     if (shouldSkipElement(parent)) return true;
     if (parent.dataset?.translated === 'true') return true;
     parent = parent.parentElement;
   }
 
-  // 检查是否在主要内容区域
   if (mainAreas && !mainAreas.includes(document.body)) {
     let inMain = false, p = node.parentElement;
     while (p) { if (mainAreas.includes(p)) { inMain = true; break; } p = p.parentElement; }
     if (!inMain) return true;
   }
 
-  const text = node.textContent.trim();
-  if (!text || text.length < 2 || /^\d+$/.test(text)) return true;
+  const text = (node.textContent || '').trim();
+  if (!text || text.length < 2) return true;
+  if (/^\d+$/.test(text)) return true;
+  if (/^[^\w\u4e00-\u9fff]+$/.test(text)) return true;
   return false;
 }
 
-// 只提取可见区域内的文本
 function extractPageTexts() {
   const textNodes = [];
   const mainAreas = findMainContentAreas();
-  console.log('主内容区:', mainAreas[0].tagName);
+  console.log('主内容区:', mainAreas[0].tagName, mainAreas[0].className);
 
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+  let totalNodes = 0, skippedNodes = 0, notInView = 0;
   let node;
+
   while (node = walker.nextNode()) {
-    if (!shouldSkipNode(node, mainAreas)) {
-      // 检查是否在视口内
-      const parent = node.parentElement;
-      if (parent && isInViewport(parent)) {
-        textNodes.push({
-          node: node,
-          text: node.textContent.trim(),
-          parent: parent
-        });
-      }
+    totalNodes++;
+
+    if (shouldSkipNode(node, mainAreas)) {
+      skippedNodes++;
+      continue;
+    }
+
+    const parent = node.parentElement;
+    if (parent && isInViewport(parent)) {
+      textNodes.push({ node, text: node.textContent.trim(), parent });
+    } else {
+      notInView++;
     }
   }
 
-  console.log('可见文本节点:', textNodes.length);
+  console.log('总节点:', totalNodes, '跳过:', skippedNodes, '不在视口:', notInView, '有效:', textNodes.length);
   return textNodes;
 }
 
 function extractSelectedText() {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) return null;
-  const text = selection.toString().trim();
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const text = sel.toString().trim();
   if (!text) return null;
-  const rect = selection.getRangeAt(0).getBoundingClientRect();
+  const rect = sel.getRangeAt(0).getBoundingClientRect();
   return {
-    text: text,
+    text,
     rect: {
       top: rect.top + window.scrollY,
       left: rect.left + window.scrollX,
