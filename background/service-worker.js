@@ -1,12 +1,103 @@
 // background/service-worker.js
 
+// ==================== 缓存系统 ====================
+
+const CACHE_CONFIG = {
+  TTL: 7 * 24 * 60 * 60 * 1000,  // 7 天（毫秒）
+  MAX_ENTRIES: 5000,              // 最大条目数
+  CLEANUP_RATIO: 0.2              // 超限时清理 20% 最旧条目
+};
+
+// 生成文本缓存 key（基于原文 + 目标语言）
+function generateTextCacheKey(text, targetLang) {
+  const str = `${text}:${targetLang}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return `t_${Math.abs(hash)}`;
+}
+
+// 获取文本翻译缓存
+async function getTextCache(text, targetLang) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['cache'], (result) => {
+      const cache = result.cache || {};
+      const key = generateTextCacheKey(text, targetLang);
+      const entry = cache[key];
+
+      if (!entry) {
+        resolve(null);
+        return;
+      }
+
+      // 检查是否过期
+      if (Date.now() - entry.timestamp > CACHE_CONFIG.TTL) {
+        delete cache[key];
+        chrome.storage.local.set({ cache }, () => {});
+        resolve(null);
+        return;
+      }
+
+      resolve(entry.translated);
+    });
+  });
+}
+
+// 设置文本翻译缓存
+async function setTextCache(text, translated, targetLang) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['cache'], (result) => {
+      const cache = result.cache || {};
+      const key = generateTextCacheKey(text, targetLang);
+
+      cache[key] = {
+        original: text,
+        translated: translated,
+        targetLang: targetLang,
+        timestamp: Date.now()
+      };
+
+      chrome.storage.local.set({ cache }, async () => {
+        // 检查是否需要清理
+        await maybeCleanupCache(cache);
+        resolve();
+      });
+    });
+  });
+}
+
+// 检查并清理缓存
+async function maybeCleanupCache(cache) {
+  const entries = Object.entries(cache);
+
+  if (entries.length > CACHE_CONFIG.MAX_ENTRIES) {
+    console.log(`缓存超限 (${entries.length}/${CACHE_CONFIG.MAX_ENTRIES})，开始清理...`);
+
+    // 按时间排序，删除最旧的 20%
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    const toDelete = Math.floor(entries.length * CACHE_CONFIG.CLEANUP_RATIO);
+
+    for (let i = 0; i < toDelete; i++) {
+      delete cache[entries[i][0]];
+    }
+
+    await chrome.storage.local.set({ cache });
+    console.log(`缓存清理完成，删除了 ${toDelete} 条`);
+  }
+}
+
+// ==================== 原有代码 ====================
+
 const LANGUAGE_MAP = {
   'zh-CN': '简体中文', 'zh-TW': '繁体中文', 'en': '英语',
   'ja': '日语', 'ko': '韩语', 'fr': '法语',
   'de': '德语', 'es': '西班牙语', 'ru': '俄语'
 };
 
-const MODELS = { 'GLM-4': 'glm-4', 'GLM-4-AIR': 'glm-4-air', 'GLM-4-FLASH': 'glm-4-flash' };
+const MODELS = { 'GLM-3-Turbo': 'glm-3-turbo', 'GLM-4': 'glm-4', 'GLM-4-AIR': 'glm-4-air', 'GLM-4-FLASH': 'glm-4-flash' };
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({ id: 'translatePage', title: '翻译整页', contexts: ['page'] });
@@ -131,7 +222,7 @@ async function translateSelection(data, tabId) {
 
 async function translate(text, settings, separator) {
   const lang = LANGUAGE_MAP[settings.targetLang] || settings.targetLang;
-  const model = MODELS[settings.model] || 'glm-4-flash';
+  const model = MODELS[settings.model] || 'glm-3-turbo';
 
   let prompt;
   if (separator) {
@@ -179,7 +270,7 @@ async function getSettings() {
   return new Promise(r => chrome.storage.local.get(['apiKey', 'targetLang', 'model', 'maxConcurrency', 'filterNodes'], res => r({
     apiKey: res.apiKey || '',
     targetLang: res.targetLang || 'zh-CN',
-    model: res.model || 'GLM-4-FLASH',
+    model: res.model || 'GLM-3-Turbo',
     maxConcurrency: res.maxConcurrency || 5,
     filterNodes: res.filterNodes !== false
   })));

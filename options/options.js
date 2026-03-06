@@ -13,6 +13,7 @@ const LANGUAGES = [
 ];
 
 const MODELS = [
+  { value: 'GLM-3-Turbo', name: 'GLM-3-Turbo (默认)' },
   { value: 'GLM-4-FLASH', name: 'GLM-4-FLASH (快速)' },
   { value: 'GLM-4-AIR', name: 'GLM-4-AIR (平衡)' },
   { value: 'GLM-4', name: 'GLM-4 (最佳)' }
@@ -21,7 +22,7 @@ const MODELS = [
 const DEFAULT_SETTINGS = {
   apiKey: '',
   targetLang: 'zh-CN',
-  model: 'GLM-4-FLASH',
+  model: 'GLM-3-Turbo',
   filterNodes: true,
   maxConcurrency: 5
 };
@@ -38,7 +39,7 @@ async function loadSettings() {
     chrome.storage.local.get(['apiKey', 'targetLang', 'model', 'filterNodes', 'maxConcurrency'], (result) => {
       document.getElementById('apiKey').value = result.apiKey || '';
       document.getElementById('targetLang').value = result.targetLang || 'zh-CN';
-      document.getElementById('model').value = result.model || 'GLM-4-FLASH';
+      document.getElementById('model').value = result.model || 'GLM-3-Turbo';
       document.getElementById('filterNodes').checked = result.filterNodes !== false;
       document.getElementById('maxConcurrency').value = result.maxConcurrency || 5;
       resolve();

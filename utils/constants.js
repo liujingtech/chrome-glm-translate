@@ -1,6 +1,7 @@
 // utils/constants.js
 
 const MODELS = {
+  'GLM-3-Turbo': 'glm-3-turbo',
   'GLM-4': 'glm-4',
   'GLM-4-AIR': 'glm-4-air',
   'GLM-4-FLASH': 'glm-4-flash'
@@ -36,7 +37,7 @@ const LANGUAGE_MAP = {
 const DEFAULT_SETTINGS = {
   apiKey: '',
   targetLang: 'zh-CN',
-  model: 'GLM-4-FLASH',
+  model: 'GLM-3-Turbo',
   filterNodes: true,
   maxConcurrency: 5
 };
@@ -44,7 +45,7 @@ const DEFAULT_SETTINGS = {
 const SKIP_TAGS = ['SCRIPT', 'STYLE', 'INPUT', 'TEXTAREA', 'NOSCRIPT', 'SVG', 'SELECT', 'BUTTON', 'IFRAME'];
 
 function getModelIndex(name) {
-  return MODELS[name] || 'glm-4-flash';
+  return MODELS[name] || 'glm-3-turbo';
 }
 
 function getLanguageName(code) {
