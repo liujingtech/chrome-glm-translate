@@ -3,46 +3,43 @@
 let currentTranslationNodes = [];
 let translatedIndices = new Set();
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  handleMessage(message, sender, sendResponse);
+chrome.runtime.onMessage.addListener((msg, sender, sendRes) => {
+  handleMessage(msg, sender, sendRes);
   return true;
 });
 
-async function handleMessage(message, sender, sendResponse) {
+async function handleMessage(msg, sender, sendRes) {
   try {
-    switch (message.type) {
+    switch (msg.type) {
       case 'TRANSLATE_PAGE':
         handleTranslatePage();
-        sendResponse({ success: true });
+        sendRes({ success: true });
         break;
       case 'TRANSLATE_SELECTION':
         handleTranslateSelection();
-        sendResponse({ success: true });
+        sendRes({ success: true });
         break;
       case 'PARTIAL_TRANSLATION_RESULT':
-        handlePartialResult(message.data);
-        sendResponse({ success: true });
+        handlePartialResult(msg.data);
+        sendRes({ success: true });
         break;
       case 'TRANSLATION_COMPLETE':
         handleTranslationComplete();
-        sendResponse({ success: true });
+        sendRes({ success: true });
         break;
       case 'SHOW_API_GUIDE':
         showApiKeyGuide();
         setupGuideEvents();
-        sendResponse({ success: true });
+        sendRes({ success: true });
         break;
       case 'SELECTION_TRANSLATION_RESULT':
-        handleSelectionTranslationResult(message.data);
-        sendResponse({ success: true });
+        handleSelectionResult(msg.data);
+        sendRes({ success: true });
         break;
       default:
-        sendResponse({ success: false });
+        sendRes({ success: false });
     }
-  } catch (e) {
-    console.error('处理失败:', e);
-    sendResponse({ success: false });
-  }
+  } catch (e) { console.error('处理失败:', e); sendRes({ success: false }); }
 }
 
 function handleTranslatePage() {
@@ -53,89 +50,68 @@ function handleTranslatePage() {
   const textNodes = extractPageTexts();
   if (textNodes.length === 0) {
     hideLoadingState();
-    showError('没有可翻译的内容');
+    showError('没有可见内容可翻译');
     return;
   }
 
   currentTranslationNodes = textNodes;
   const texts = textNodes.map(item => item.text);
 
-  console.log('请求翻译, 节点数:', texts.length);
+  console.log('请求翻译, 可见节点:', texts.length);
 
-  chrome.runtime.sendMessage({
-    type: 'REQUEST_TRANSLATION',
-    data: { texts, url: location.href }
-  });
+  chrome.runtime.sendMessage({ type: 'REQUEST_TRANSLATION', data: { texts } });
 }
 
 function handleTranslateSelection() {
   const sel = extractSelectedText();
   if (!sel) { showError('请先选择内容'); return; }
   showLoadingState();
-  chrome.runtime.sendMessage({
-    type: 'REQUEST_SELECTION_TRANSLATION',
-    data: { text: sel.text, rect: sel.rect }
-  });
+  chrome.runtime.sendMessage({ type: 'REQUEST_SELECTION_TRANSLATION', data: sel });
 }
 
-// 流式处理部分结果
 function handlePartialResult(data) {
-  if (!data.success) {
-    console.error('批次失败:', data.error);
-    return;
-  }
+  if (!data.success) { console.error('批次失败'); return; }
 
-  const startIndex = data.startIndex;
-  const translations = data.translations;
+  const { startIndex, translations, progress } = data;
   const nodes = currentTranslationNodes;
-  const progress = data.progress;
-
-  console.log(`渲染批次: ${startIndex} - ${startIndex + translations.length - 1}`);
 
   // 更新进度
-  if (progress) {
-    updateProgress(progress);
-  }
+  if (progress) updateProgress(progress);
 
-  // 立即渲染这批翻译
+  // 渲染
   for (let i = 0; i < translations.length; i++) {
-    const nodeIndex = startIndex + i;
-    if (translatedIndices.has(nodeIndex)) continue;
+    const idx = startIndex + i;
+    if (translatedIndices.has(idx)) continue;
 
-    const item = nodes[nodeIndex];
-    const translated = translations[i];
-
-    if (translated && item?.node?.parentElement) {
+    const item = nodes[idx];
+    const trans = translations[i];
+    if (trans && item?.node?.parentElement) {
       try {
-        renderBilingual(item.node, translated);
-        translatedIndices.add(nodeIndex);
-      } catch (e) {
-        console.warn('渲染失败:', e);
-      }
+        renderBilingual(item.node, trans);
+        translatedIndices.add(idx);
+      } catch (e) {}
     }
   }
 }
 
 function handleTranslationComplete() {
   hideLoadingState();
-  console.log('翻译完成, 已渲染:', translatedIndices.size);
+  console.log('完成, 已渲染:', translatedIndices.size);
   currentTranslationNodes = [];
   translatedIndices.clear();
 }
 
-function handleSelectionTranslationResult(data) {
+function handleSelectionResult(data) {
   hideLoadingState();
   if (!data.success) { showError(data.error || '翻译失败'); return; }
   showSelectionPopup(data.translated, data.rect);
 }
 
-function updateProgress(progress) {
+function updateProgress(p) {
   const loader = document.getElementById('zhipu-loading');
   if (loader) {
     const span = loader.querySelector('span');
-    if (span) {
-      span.textContent = `翻译中... ${progress.done}/${progress.total}`;
-    }
+    if (span) span.textContent = `翻译中... ${p.done}/${p.total}`;
   }
 }
 
@@ -151,14 +127,8 @@ function setupGuideEvents() {
       btn.disabled = true;
       btn.textContent = '验证中...';
       chrome.runtime.sendMessage({ type: 'SAVE_API_KEY', data: { apiKey } }, res => {
-        if (res?.success) {
-          hideApiKeyGuide();
-          showSuccess('配置成功');
-        } else {
-          btn.disabled = false;
-          btn.textContent = '保存并开始使用';
-          showError(res?.error || '验证失败');
-        }
+        if (res?.success) { hideApiKeyGuide(); showSuccess('配置成功'); }
+        else { btn.disabled = false; btn.textContent = '保存并开始使用'; showError(res?.error || '验证失败'); }
       });
     };
   }

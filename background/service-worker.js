@@ -29,9 +29,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendRes) => {
 async function handleMsg(msg, sender, sendRes) {
   try {
     if (msg.type === 'REQUEST_TRANSLATION') {
-      // 立即响应，后台继续翻译
       sendRes({ success: true });
-      await translatePage(msg.data, sender.tab.id);
+      await translatePageParallel(msg.data, sender.tab.id);
     } else if (msg.type === 'REQUEST_SELECTION_TRANSLATION') {
       sendRes({ success: true });
       await translateSelection(msg.data, sender.tab.id);
@@ -48,68 +47,63 @@ async function handleMsg(msg, sender, sendRes) {
     } else if (msg.type === 'CLEAR_CACHE') {
       await clearCache();
       sendRes({ success: true });
-    } else {
-      sendRes({ success: false });
-    }
+    } else { sendRes({ success: false }); }
   } catch (e) {
     console.error('处理失败:', e);
     sendRes({ success: false, error: e.message });
   }
 }
 
-// 翻译页面 - 流式渲染
-async function translatePage(data, tabId) {
+// 并行翻译页面
+async function translatePageParallel(data, tabId) {
   const settings = await getSettings();
   const texts = data.texts;
-  const batchSize = 15; // 减小批次，更快响应
-  const totalBatches = Math.ceil(texts.length / batchSize);
-  let translatedCount = 0;
+  const total = texts.length;
+  const batchSize = 20;
+  const batches = [];
 
-  console.log('开始翻译, 总数:', texts.length, '批次:', totalBatches);
-
+  // 分批
   for (let i = 0; i < texts.length; i += batchSize) {
-    const batchNum = Math.floor(i / batchSize) + 1;
-    const batch = texts.slice(i, i + batchSize);
+    batches.push({ startIndex: i, texts: texts.slice(i, i + batchSize) });
+  }
 
+  console.log(`并行翻译: ${total}个文本, ${batches.length}个批次`);
+
+  // 并行发送所有批次
+  const promises = batches.map(async (batch, batchIndex) => {
     try {
-      const SEP = `<<<T${Date.now()}P>>>`;
-      const joined = batch.join('\n' + SEP + '\n');
+      const SEP = `<<S${batchIndex}E>>`;
+      const joined = batch.texts.join('\n' + SEP + '\n');
       const translated = await translate(joined, settings, SEP);
       const parts = translated.split(SEP);
       const translations = parts.map(p => p.trim());
 
-      translatedCount += translations.length;
-
-      // 立即发送这批结果，content script 会立即渲染
+      // 立即发送结果
       sendMsg(tabId, {
         type: 'PARTIAL_TRANSLATION_RESULT',
         data: {
           success: true,
-          startIndex: i,
+          startIndex: batch.startIndex,
           translations: translations,
-          progress: { current: batchNum, total: totalBatches, done: translatedCount, total: texts.length }
+          progress: { done: batch.startIndex + translations.length, total: total }
         }
       });
-
-      console.log(`批次 ${batchNum}/${totalBatches} 完成, 已翻译: ${translatedCount}/${texts.length}`);
     } catch (e) {
-      console.error(`批次 ${batchNum} 失败:`, e);
-      // 失败时发送原文
+      console.error(`批次${batchIndex}失败:`, e);
+      // 失败时用原文
       sendMsg(tabId, {
         type: 'PARTIAL_TRANSLATION_RESULT',
-        data: {
-          success: false,
-          startIndex: i,
-          translations: batch,
-          error: e.message
-        }
+        data: { success: false, startIndex: batch.startIndex, translations: batch.texts, error: e.message }
       });
     }
-  }
+  });
+
+  // 等待所有完成
+  await Promise.all(promises);
 
   // 全部完成
   sendMsg(tabId, { type: 'TRANSLATION_COMPLETE' });
-  console.log('翻译全部完成');
+  console.log('并行翻译完成');
 }
 
 async function translateSelection(data, tabId) {
@@ -124,12 +118,13 @@ async function translate(text, settings, separator) {
 
   let prompt;
   if (separator) {
-    prompt = `翻译成${lang}，只返回翻译结果。
-段落间用"${separator}"分隔，必须保留这个分隔符，不要删除。
+    prompt = `翻译成${lang}，只返回结果。段落间用"${separator}"分隔，保持分隔符不变：
 
 ${text}`;
   } else {
-    prompt = `翻译成${lang}，只返回翻译结果：\n${text}`;
+    prompt = `翻译成${lang}，只返回结果：
+
+${text}`;
   }
 
   const res = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
@@ -142,10 +137,9 @@ ${text}`;
   });
 
   if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.error?.message || 'API请求失败');
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'API失败');
   }
-
   const data = await res.json();
   return data.choices[0]?.message?.content || text;
 }
@@ -162,22 +156,15 @@ async function sendMsg(tabId, msg) {
   }
 }
 
-async function checkApiKey() {
-  const s = await getSettings();
-  return !!s.apiKey;
-}
+async function checkApiKey() { const s = await getSettings(); return !!s.apiKey; }
 
 async function getSettings() {
   return new Promise(r => chrome.storage.local.get(['apiKey', 'targetLang', 'model'], res => r({ apiKey: res.apiKey || '', targetLang: res.targetLang || 'zh-CN', model: res.model || 'GLM-4-FLASH' })));
 }
 
-async function saveSettings(s) {
-  return new Promise(r => chrome.storage.local.set(s, r));
-}
+async function saveSettings(s) { return new Promise(r => chrome.storage.local.set(s, r)); }
 
-async function clearCache() {
-  return new Promise(r => chrome.storage.local.set({ cache: {} }, r));
-}
+async function clearCache() { return new Promise(r => chrome.storage.local.set({ cache: {} }, r)); }
 
 async function validateApiKey(key) {
   try {
