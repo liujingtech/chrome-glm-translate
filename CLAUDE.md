@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # 智谱翻译 Chrome 插件 - Claude 开发指南
 
 ## 项目概述
@@ -12,7 +16,7 @@
 chromeplugin/
 ├── manifest.json              # 扩展配置，content_scripts 注入顺序很重要
 ├── background/
-│   └── service-worker.js      # 后台服务，处理 API 调用和消息路由
+│   └── service-worker.js      # 后台服务，处理 API 调用、缓存、消息路由
 ├── content/
 │   ├── content.js             # 主入口，处理消息、协调翻译流程
 │   ├── extractor.js           # 提取页面可翻译文本（TreeWalker）
@@ -34,7 +38,7 @@ chromeplugin/
 2. `content.js` 的 `handleTranslatePage()` 获取设置，调用 `extractPageTexts()`
 3. `extractor.js` 使用 TreeWalker 提取文本节点，过滤无效内容
 4. `content.js` 发送 `REQUEST_TRANSLATION` 到 background
-5. `background` 分批（每批 20 条）并行调用 GLM API（受 maxConcurrency 限制）
+5. `background` 先查询缓存，未命中的文本分批（每批 20 条）并行调用 GLM API
 6. 每批完成后发送 `PARTIAL_TRANSLATION_RESULT`，`content.js` 调用 `replaceText()` 替换
 7. 全部完成后发送 `TRANSLATION_COMPLETE`
 
@@ -46,8 +50,8 @@ chromeplugin/
 | extractor.js | `shouldSkip(el, strict)` | 判断元素是否应跳过（script/style/导航等） |
 | renderer.js | `replaceText(node, text)` | 直接替换文本节点内容，保存原文到 `_originalText` |
 | renderer.js | `removeAllTranslations()` | 恢复所有原文 |
-| background | `translatePageParallel()` | 并发控制的批量翻译 |
-| background | `getSettings()` | 获取所有设置（含默认值） |
+| background | `translatePageParallel()` | 并发控制的批量翻译，含缓存查询 |
+| background | `getTextCache()/setTextCache()` | 翻译结果缓存（7天过期，最多5000条） |
 
 ## 设置项
 
@@ -57,16 +61,33 @@ chromeplugin/
 {
   apiKey: '',           // 用户输入，必填
   targetLang: 'zh-CN',  // 目标语言
-  model: 'GLM-4-FLASH', // 模型：GLM-4, GLM-4-AIR, GLM-4-FLASH
-  filterNodes: true,    // 是否严格过滤无效节点
-  maxConcurrency: 5     // 最大并发 API 请求数（1-20）
+  model: 'GLM-3-Turbo', // 模型（并发数由模型决定）
+  filterNodes: true     // 是否严格过滤无效节点
 }
 ```
+
+## 模型配置
+
+```javascript
+const MODELS = {
+  'GLM-3-Turbo': { api: 'glm-3-turbo', maxConcurrency: 50 },
+  'GLM-4-FLASH': { api: 'glm-4-flash', maxConcurrency: 50 },
+  'GLM-4-AIR': { api: 'glm-4-air', maxConcurrency: 100 },
+  'GLM-4': { api: 'glm-4', maxConcurrency: 30 }
+};
+```
+
+## 缓存系统
+
+- 缓存键：基于 `原文:目标语言` 的 hash
+- TTL：7 天
+- 最大条目：5000 条，超限时清理最旧的 20%
+- 存储：`chrome.storage.local` 的 `cache` 字段
 
 ## API 调用
 
 - 端点：`https://open.bigmodel.cn/api/paas/v4/chat/completions`
-- 模型映射：`GLM-4` → `glm-4`, `GLM-4-AIR` → `glm-4-air`, `GLM-4-FLASH` → `glm-4-flash`
+- 模型映射：`GLM-3-Turbo` → `glm-3-turbo`, `GLM-4` → `glm-4`, 等
 - 批量翻译使用动态分隔符 `<<S${index}E>>` 分隔多条文本
 
 ## 常见问题排查
@@ -74,7 +95,7 @@ chromeplugin/
 1. **翻译没反应** → 检查 content script 是否加载，看控制台是否有错误
 2. **"没有可见内容"** → `filterNodes` 可能过于严格，检查 `extractPageTexts` 日志
 3. **API 报错 "unsafe content"** → 某些内容触发安全过滤，已做 fallback 保留原文
-4. **连接失败** → background 可能未注入 content script，`sendMsg` 有自动注入逻辑
+4. **变量重复声明错误** → content script 只通过 manifest.json 加载，不要在 sendMsg 中重复注入
 
 ## 开发注意事项
 
@@ -82,10 +103,11 @@ chromeplugin/
 - **content script 注入顺序**：constants.js → extractor.js → renderer.js → content.js
 - **修改 content script 后**需要刷新页面才能生效
 - **修改 background 后**需要点击扩展页的刷新按钮
+- **发布新版本时**更新 manifest.json 的 version，重新打包 zip
 
-## 未来可能的改进
+## 打包发布
 
-- [ ] 添加翻译缓存（基于 URL + 内容 hash）
-- [ ] 支持恢复原文按钮
-- [ ] 支持排除特定网站
-- [ ] 添加翻译历史记录
+```powershell
+# 创建发布包（排除开发文件）
+Compress-Archive -Path background,content,icons,options,popup,utils,manifest.json -DestinationPath chromeplugin.zip
+```
