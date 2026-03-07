@@ -154,9 +154,9 @@ chromeplugin/
 
 ### 联系我们 / Contact
 
-如有隐私相关问题，请联系：[在此添加您的邮箱]
+如有隐私相关问题，请联系：liujingtech@gmail.com
 
-For privacy-related questions, please contact: [Add your email here]
+For privacy-related questions, please contact: liujingtech@gmail.com
 
 ## License
 
