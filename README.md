@@ -15,9 +15,18 @@
 
 ## 安装
 
-### 从源码安装
+### 方式一：下载安装包（推荐）
 
-1. 下载或克隆本项目
+1. 前往 [Releases](../../releases) 页面下载最新版本的 `chromeplugin.zip`
+2. 解压 zip 文件到任意目录
+3. 打开 Chrome，访问 `chrome://extensions/`
+4. 开启右上角「开发者模式」
+5. 点击「加载已解压的扩展程序」，选择解压后的文件夹
+6. 安装完成
+
+### 方式二：从源码安装
+
+1. 克隆本项目：`git clone https://github.com/你的用户名/chromeplugin.git`
 2. 打开 Chrome，访问 `chrome://extensions/`
 3. 开启右上角「开发者模式」
 4. 点击「加载已解压的扩展程序」，选择项目目录

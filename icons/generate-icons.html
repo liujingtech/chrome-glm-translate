@@ -32,8 +32,11 @@
       const canvas = document.getElementById(canvasId);
       const ctx = canvas.getContext('2d');
 
-      // Background
-      ctx.fillStyle = '#1890ff';
+      // Background gradient (same as original icon)
+      const gradient = ctx.createLinearGradient(0, 0, size, size);
+      gradient.addColorStop(0, '#4A4DE4');
+      gradient.addColorStop(1, '#0BAFE5');
+      ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, size, size);
 
       // Border radius (simulate rounded corners)
@@ -44,12 +47,34 @@
       ctx.fill();
       ctx.globalCompositeOperation = 'source-over';
 
-      // Text "译"
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `bold ${size * 0.5}px Arial`;
+      // Text "A→文" - 分开绘制，箭头更小
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('译', size / 2, size / 2);
+
+      const mainFontSize = size * 0.32;
+      const arrowFontSize = size * 0.2;
+      const centerY = size / 2 + size * 0.02;
+
+      // 计算每个字符的位置
+      const spacing = size * 0.04;
+      const char1Width = mainFontSize * 0.7;  // A 的近似宽度
+      const char2Width = arrowFontSize * 0.8; // → 的近似宽度
+      const char3Width = mainFontSize * 0.9;  // 文 的近似宽度
+      const totalWidth = char1Width + spacing + char2Width + spacing + char3Width;
+      const startX = (size - totalWidth) / 2 + char1Width / 2;
+
+      // 绘制 "A"
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${mainFontSize}px "Microsoft YaHei", "PingFang SC", "SimHei", sans-serif`;
+      ctx.fillText('A', startX, centerY);
+
+      // 绘制 "→" (更小)
+      ctx.font = `${arrowFontSize}px "Microsoft YaHei", "PingFang SC", "SimHei", sans-serif`;
+      ctx.fillText('→', startX + char1Width / 2 + spacing + char2Width / 2, centerY);
+
+      // 绘制 "文"
+      ctx.font = `bold ${mainFontSize}px "Microsoft YaHei", "PingFang SC", "SimHei", sans-serif`;
+      ctx.fillText('文', startX + char1Width / 2 + spacing + char2Width + spacing + char3Width / 2, centerY);
     }
 
     function download(canvasId, size) {
