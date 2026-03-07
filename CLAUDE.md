@@ -10,6 +10,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **核心功能**：右键翻译整页、划词翻译、直接替换原文（非双语对照）
 
+## 快速开始
+
+1. 在 Chrome 中访问 `chrome://extensions/`
+2. 开启「开发者模式」
+3. 点击「加载已解压的扩展程序」，选择本项目目录
+4. 修改代码后：
+   - content script → 刷新页面
+   - background/service-worker → 点击扩展页刷新按钮
+
+## 调试方法
+
+- **Service Worker 控制台**：`chrome://extensions/` → 点击扩展的 "Service Worker" 链接
+- **Content Script 控制台**：在目标页面按 F12 打开开发者工具
+- **存储数据**：开发者工具 → Application → Storage → Extensions
+
 ## 架构说明
 
 ```
