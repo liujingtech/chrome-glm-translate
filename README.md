@@ -96,6 +96,68 @@ chromeplugin/
 - 翻译会消耗 API 配额，默认使用 GLM-3-Turbo，性价比高
 - 部分网站可能因 CSP 策略限制无法正常工作
 
+## 隐私政策 / Privacy Policy
+
+**最后更新 / Last Updated**: 2024年3月
+
+### 中文
+
+**智谱翻译**（以下简称"本扩展"）尊重并保护用户隐私。本隐私政策说明我们如何收集、使用和保护您的信息：
+
+1. **数据收集**
+   - 本扩展仅收集用户主动配置的 API Key 和设置偏好（目标语言、模型选择等）
+   - 翻译时，本扩展会读取当前网页的文本内容用于翻译
+   - 翻译结果会缓存在本地以提升性能
+
+2. **数据存储**
+   - 所有数据均存储在用户本地的 Chrome Storage 中
+   - 我们不会将任何用户数据上传到我们的服务器
+
+3. **数据传输**
+   - 网页文本内容会发送到智谱 GLM API 进行翻译
+   - API Key 会随翻译请求发送到智谱 API 进行身份验证
+   - 智谱 API 的数据处理请参考[智谱隐私政策](https://open.bigmodel.cn/)
+
+4. **数据使用**
+   - 收集的数据仅用于提供翻译服务
+   - 我们不会出售、出租或共享用户数据给第三方
+
+5. **第三方服务**
+   - 本扩展使用智谱 GLM API 提供翻译服务
+   - 使用本扩展即表示您同意智谱 API 的服务条款
+
+### English
+
+**ZhiPu Translate** (hereinafter "this extension") respects and protects user privacy. This privacy policy explains how we collect, use, and protect your information:
+
+1. **Data Collection**
+   - This extension only collects the API Key and preference settings (target language, model selection, etc.) that users actively configure
+   - During translation, this extension reads the text content of the current web page for translation
+   - Translation results are cached locally for better performance
+
+2. **Data Storage**
+   - All data is stored in the user's local Chrome Storage
+   - We do not upload any user data to our servers
+
+3. **Data Transmission**
+   - Web page text content is sent to ZhiPu GLM API for translation
+   - API Key is sent to ZhiPu API for authentication with each translation request
+   - Please refer to [ZhiPu Privacy Policy](https://open.bigmodel.cn/) for ZhiPu API's data processing
+
+4. **Data Usage**
+   - Collected data is only used to provide translation services
+   - We do not sell, rent, or share user data with third parties
+
+5. **Third-Party Services**
+   - This extension uses ZhiPu GLM API to provide translation services
+   - By using this extension, you agree to ZhiPu API's terms of service
+
+### 联系我们 / Contact
+
+如有隐私相关问题，请联系：[在此添加您的邮箱]
+
+For privacy-related questions, please contact: [Add your email here]
+
 ## License
 
 MIT
